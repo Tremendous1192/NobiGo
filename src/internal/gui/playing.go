@@ -300,19 +300,30 @@ func (g *window) drawSidebar(screen *ebiten.Image, b *app.Board, turn int) {
 	if g.tab == 1 {
 		body = positionComment(b)
 	}
-	if g.tab == 2 && c.Phase == app.Review {
-		body = reviewAdvice(c, turn, g.reviewBefore, b)
+	showAdvice := g.tab == 2 && c.Phase == app.Review
+	if showAdvice {
+		body = reviewAdvice(c, turn, g.reviewBefore, b).summary
 	}
-	if c.Err != nil {
+	if c.Err != nil && !showAdvice {
 		body = "解析に失敗しました。\n「解析を再試行」でエンジンを再接続できます。"
 	}
 	if g.notice != "" {
 		body = g.notice
 	}
-	if c.CPUDeadlineMiss {
+	if c.CPUDeadlineMiss && !showAdvice {
 		body = "このPCで5秒を超える応答がありました。\n性能条件は未達です。再試行か中止を選べます。"
 	}
-	g.label(screen, g.wrap(body, 445, 16, 5), 680, 591, 16, muted)
+	if showAdvice {
+		g.label(screen, g.wrap(body, 445, 16, 3), 680, 591, 16, foreground)
+		g.button(screen, image.Rect(965, 674, 1125, 710), "詳しく", true, g.openReviewAdvice)
+		if c.Err != nil {
+			g.label(screen, "解析失敗：盤面の事実を表示", 680, 684, 15, warning)
+		} else if c.Busy {
+			g.label(screen, "解析中：盤面の事実を表示", 680, 684, 15, muted)
+		}
+	} else {
+		g.label(screen, g.wrap(body, 445, 16, 5), 680, 591, 16, muted)
+	}
 }
 
 // plot は人側視点の評価を描き、未解析の区間は線を切る。

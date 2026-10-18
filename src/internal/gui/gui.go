@@ -61,9 +61,12 @@ type window struct {
 	reviewTurn          int
 	reviewBoard         *app.Board
 	reviewBefore        *app.Board
+	advice              *adviceDialog
+	adviceCanvas        *ebiten.Image
 	autoplay            bool
 	nextReplay          time.Time
 	previewMode         bool
+	previewMinimum      bool
 	verification        *verification
 	engineBegan         time.Time
 	inputCanvas         *ebiten.Image
@@ -123,8 +126,11 @@ func Run(options Options) (result error) {
 		}
 		result = errors.Join(result, g.engine.Close())
 	}()
-	ebiten.SetWindowTitle("PlayGo(v0.2.0)")
+	ebiten.SetWindowTitle("PlayGo(v0.3.0)")
 	ebiten.SetWindowSize(1180, 800)
+	if g.previewMinimum {
+		ebiten.SetWindowSize(885, 600)
+	}
 	ebiten.SetWindowSizeLimits(885, 600, -1, -1)
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 	err = ebiten.RunGame(g)
@@ -174,7 +180,6 @@ func (g *window) Update() error {
 		g.controller.Poll()
 		g.syncPhase()
 		g.advanceResult(time.Now())
-		g.advanceReview(time.Now())
 	}
 	if g.verification != nil {
 		return g.updateVerification()
@@ -188,15 +193,22 @@ func (g *window) Update() error {
 		g.dismiss()
 		return nil
 	}
+	if g.advice != nil {
+		g.updateAdviceInput()
+	}
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		x, y := ebiten.CursorPosition()
 		for i := len(g.actions) - 1; i >= 0; i-- {
 			h := g.actions[i]
 			if image.Pt(x, y).In(h.rect) {
 				h.action()
-				break
+				return nil
 			}
 		}
+	}
+	// 詳細を開くクリックより先に再生を進めると、読もうとした手と助言がずれる。
+	if g.controller != nil {
+		g.advanceReview(time.Now())
 	}
 	return nil
 }
@@ -217,6 +229,9 @@ func (g *window) Draw(screen *ebiten.Image) {
 	if g.dialog != nil {
 		g.drawDialog(screen)
 	}
+	if g.advice != nil {
+		g.drawAdviceDialog(screen)
+	}
 	if g.previewMode {
 		g.label(screen, "画面確認用の合成例・架空の評価値", 830, 7, 12, warning)
 	}
@@ -228,9 +243,17 @@ func (g *window) Draw(screen *ebiten.Image) {
 	}
 	g.frames++
 	if g.screenshot != "" && g.frames == 2 {
+		capture := screen
+		if g.previewMinimum {
+			// 固定の論理座標の画像だけでは最小ウィンドウの文字サイズを確認できない。
+			capture = ebiten.NewImage(885, 600)
+			op := &ebiten.DrawImageOptions{Filter: ebiten.FilterLinear}
+			op.GeoM.Scale(.75, .75)
+			capture.DrawImage(screen, op)
+		}
 		f, err := os.Create(g.screenshot)
 		if err == nil {
-			err = errors.Join(png.Encode(f, screen), f.Close())
+			err = errors.Join(png.Encode(f, capture), f.Close())
 		}
 		g.captureErr = err
 	}
@@ -242,6 +265,7 @@ func (g *window) syncPhase() {
 		return
 	}
 	phase := g.controller.Phase
+	g.advice = nil
 	switch phase {
 	case app.Playing:
 		if g.shownPhase != app.Scoring {

@@ -84,6 +84,19 @@ func (g *window) fit(value string, width, size float64) string {
 
 // wrap は日本語の文章を表示幅で折り返す。
 func (g *window) wrap(value string, width, size float64, maxLines int) string {
+	lines := g.wrapLines(value, width, size)
+	if maxLines <= 0 {
+		return ""
+	}
+	if len(lines) > maxLines {
+		lines = lines[:maxLines]
+		lines[maxLines-1] = g.fit(lines[maxLines-1]+"…", width, size)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// wrapLines は省略せずに全行を返し、詳細表示で末尾まで読めるようにする。
+func (g *window) wrapLines(value string, width, size float64) []string {
 	g.face.Size = size
 	lines := []string{}
 	line := ""
@@ -95,18 +108,20 @@ func (g *window) wrap(value string, width, size float64, maxLines int) string {
 		}
 		next := line + string(r)
 		if w, _ := text.Measure(next, g.face, size*1.5); w > width && line != "" {
-			lines = append(lines, line)
-			line = string(r)
+			runes := []rune(next)
+			split := len(runes) - 1
+			// 句読点だけの行や行末の開き括弧は、拡大した説明文を読みにくくする。
+			for split > 1 && (strings.ContainsRune("、。，．！？!?)]}）」』】〉》", runes[split]) || strings.ContainsRune("([{（「『【〈《", runes[split-1])) {
+				split--
+			}
+			lines = append(lines, string(runes[:split]))
+			line = string(runes[split:])
 		} else {
 			line = next
 		}
 	}
 	lines = append(lines, line)
-	if len(lines) > maxLines {
-		lines = lines[:maxLines]
-		lines[maxLines-1] = g.fit(lines[maxLines-1]+"…", width, size)
-	}
-	return strings.Join(lines, "\n")
+	return lines
 }
 
 // button は有効なボタンだけをクリック対象へ登録する。
@@ -155,7 +170,7 @@ func (g *window) combo(screen *ebiten.Image, r image.Rectangle, title string, op
 }
 
 // dismiss は入力フォーカスとモーダルを解除する。
-func (g *window) dismiss() { g.field.Blur(); g.dialog = nil; g.menu = nil }
+func (g *window) dismiss() { g.field.Blur(); g.dialog = nil; g.menu = nil; g.advice = nil }
 
 // overlay は背面操作を取り除く。
 func (g *window) overlay(screen *ebiten.Image) {

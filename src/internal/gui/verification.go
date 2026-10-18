@@ -8,6 +8,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/Tremendous1192/PlayGo/engine"
@@ -280,6 +281,9 @@ func (g *window) saveVerification() error {
 
 // preparePreview は画面確認専用の合成例を作る。実測や実対局の結果には使用しない。
 func (g *window) preparePreview(mode string) error {
+	if strings.HasPrefix(mode, "review-detail") {
+		return g.prepareAdvicePreview(mode)
+	}
 	size, moves := 9, 32
 	if mode == "review-19" {
 		size, moves = 19, 220
@@ -378,4 +382,64 @@ func (g *window) preparePreview(mode string) error {
 		return errors.New("unknown preview mode")
 	}
 	return err
+}
+
+// prepareAdvicePreview は詳細・複合効果・待機・長文の描画例を作り、実プロフィールやエンジンへ接続しない。
+func (g *window) prepareAdvicePreview(mode string) error {
+	switch mode {
+	case "review-detail", "review-detail-cpu", "review-detail-combined", "review-detail-wait", "review-detail-error", "review-detail-long", "review-detail-bottom", "review-detail-min":
+	default:
+		return errors.New("unknown advice preview mode")
+	}
+	base := "review-player"
+	if mode == "review-detail-cpu" {
+		base = "review"
+	}
+	if err := g.preparePreview(base); err != nil {
+		return err
+	}
+	c := g.controller
+	if mode == "review-detail-combined" {
+		b, err := app.NewBoard(7, app.Japanese)
+		if err != nil {
+			return err
+		}
+		for _, point := range []int{2, 1, 8, 7, 0, -1, -1} {
+			if err := b.Play(point); err != nil {
+				return err
+			}
+		}
+		c.Board = b
+		c.Evaluations = make([]*engine.Analysis, len(b.Moves)+1)
+		g.reviewTurn = 5
+		g.reviewBoard, err = c.Snapshot(5)
+		if err != nil {
+			return err
+		}
+		g.reviewBefore, err = c.Snapshot(4)
+		if err != nil {
+			return err
+		}
+	}
+	if mode == "review-detail-wait" || mode == "review-detail-error" {
+		c.Evaluations = make([]*engine.Analysis, len(c.Board.Moves)+1)
+		c.Busy = mode == "review-detail-wait"
+		if mode == "review-detail-error" {
+			c.Err = errors.New("synthetic analysis failure")
+		}
+	}
+	g.syncPhase()
+	g.openReviewAdvice()
+	if mode == "review-detail-long" || mode == "review-detail-bottom" {
+		body := g.advice.body
+		for i := 1; i <= 6; i++ {
+			g.advice.body += fmt.Sprintf("\n\n長文表示の検証 %d\n%s", i, body)
+		}
+		g.advice.body += "\n長文表示の末尾まで確認できました。"
+		if mode == "review-detail-bottom" {
+			g.advice.scroll = math.MaxFloat64
+		}
+	}
+	g.previewMinimum = mode == "review-detail-min"
+	return nil
 }

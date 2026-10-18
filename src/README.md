@@ -1,4 +1,4 @@
-# PlayGo v0.2.0
+# PlayGo v0.3.0
 
 作成日: 2026-10-18。初心者向けのWindows囲碁ゲーム。日本・中国・純碁、7/9/11/13/15/19路、5段階の難易度に対応する。
 日本語GUIでCPUと対局し、採点確認と感想戦まで行う。配布利用者向けの操作説明は [README.txt](README.txt)。
@@ -15,7 +15,7 @@
 | `/src/engine/` | KataGo通信、期限、プロセス管理、設定、互換ヘッダー |
 | `/src/profile/` | 開発実行時の個人データ。Git・配布対象外 |
 | `/src/tools/` | 資産取得、エンジンビルド、ZIP作成、単体応答測定 |
-| `/codex/task-status.json` | 旧版T0～T12とv0.2.0のUX-0～UX-7の実行結果。Taskは統合しない |
+| `/codex/task-status.json` | 旧版の履歴とv0.3.0のT1～T5の実行結果。Taskは統合しない |
 
 対局状態はGUIスレッドが所有し、解析は1つの作業・1件の待機キューで実行する。
 待った・中止・局面変更では解析を取り消し、世代番号で古い応答を破棄する。
@@ -24,6 +24,10 @@ GUI終了時は作業を待ち、KataGoも終了する。
 現在局面の結果が届くまでは「解析待ち」を表示し、旧局面の色分けは流用しない。
 感想戦では表示局面と直前局面の不足解析を順番に補い、盤面差分から手の効果を説明する。
 自動再生は必要な解析を待ち、解析失敗時は停止して再試行を受け付ける。
+助言は「要点＋詳しく」。詳細は座標・石数・呼吸点を使った原則4～6文で、複合効果と危険も併記する。
+自分の手は次局の学び、CPUの手は推定される狙いと確認事項を示す。比較候補には既存解析と合法性確認を使う。
+詳細を開くと再生は停止し、閉じても自動再開しない。本文は開いた時点で固定し、解析後に開き直すと更新する。
+ホイール・上下ボタン・↑↓・PageUp/PageDown・Home/Endで全文を読み、Escまたは閉じるボタンで戻る。
 
 ## 開発環境と資産の準備
 
@@ -66,8 +70,8 @@ dev.cmd mod verify
 dev.cmd run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
 ```
 
-`check.cmd` はgofmt、vet、test、buildを順に実行する。現在は全コードが本実装の対象である。
-後日無関係な変更が混在する場合、gofmtは変更パッケージへ限定して実行する。
+`check.cmd` はgofmt、vet、test、buildを順に実行する。
+無関係な変更が混在する場合、gofmtは変更パッケージへ限定し、vet・test・buildは全体へ実行する。
 テストはプロジェクト内の一時データを使用する。実エンジン検査は通常のテストから除外している。
 
 ```cmd
@@ -89,6 +93,8 @@ CPU着手は従来どおり5,000ms以内。確定採点は色分け測定対象�
 色分け上限は確認済みPCでの回帰基準であり、すべてのPCでの保証値ではない。
 
 画面確認には次のコマンドを使う。`startup` を `game` / `game-wait` / `game-pass` / `scoring` / `result` / `choices` / `review` / `review-player` / `review-19` に替えられる。
+詳細の確認は `review-detail` / `review-detail-cpu` / `review-detail-combined` / `review-detail-wait` / `review-detail-error` / `review-detail-long` / `review-detail-bottom` / `review-detail-min`。
+`review-detail-min` は885×600で起動し、同サイズへ縮小した描画を保存する。OSや異なるDPIの見え方を保証する画像ではない。
 合成局面であることを画面に明記し、プロフィールを読み書きしない。
 
 ```cmd
@@ -104,20 +110,21 @@ dev.cmd run ./tools/package
 dev.cmd run ./tools/verify
 ```
 
-`/dist/PlayGo-v0.2.0-windows-amd64.zip` と `.sha256` を生成する。
+`/dist/PlayGo-v0.3.0-windows-amd64.zip` と `.sha256` を生成する。
 GUI EXEは `-trimpath -buildvcs=false -ldflags=-H=windowsgui` で作成し、個人パスを除去する。
 デバッグ用情報の一括削除は行わない。署名は付けていない。
 ZIPにはEXE、CPUエンジン、モデル、設定、日本語説明、空のprofile、ライセンス、出所・ハッシュを含める。
 Microsoft VC、CUDA、OpenCL、OpenSSLのDLLや、ユーザーのプロフィールは含めない。
 同梱Eigenソースは未変更で、MPLのソース提供にも対応する。
-`tools/verify` はZIPを専用一時フォルダーへ展開し、全ハッシュ・空のprofile・10画面・実エンジンの96条件を検査する。
+`tools/verify` はZIPを専用一時フォルダーへ展開し、全ハッシュ・空のprofile・18画面・実エンジンの96条件を検査する。
 色分け待ちも測定するため全体の停止期限は20分。展開先は終了時に回収する。
-画像は `.work/package-v0.2.0-*.png`、測定値は `/codex/acceptance-v0.2.0.json` に残す。
-旧版の `/codex/acceptance.json` は比較用に保持する。
+画像は `.work/package-v0.3.0-*.png`、測定値は `/codex/acceptance-v0.3.0.json` に残す。
+旧版の測定値は比較用に保持する。
 
 ## 採点・推定値・保存の限界
 
-純碁の最終得点は盤上石数で厳密に計算する。途中のCPU・勝率・目差・助言はKataGoの近似値である。
+純碁の最終得点は盤上石数で厳密に計算する。途中のCPU・勝率・目差・比較候補にはKataGoの近似評価を使う。
+助言の盤面変化は実際の前後局面から求める。未解析の優劣・数手先の結果・CPUの意図は断定しない。
 日本・中国では死石候補を表示し、プレイヤーが確認・修正して確定する。
 セキ候補は共有する空点と二眼の静的検査からの提案であり、複雑な死活の完全判定ではない。
 推定棋力は公式段級位と対応を保証しない。難易度の目標勝数は複数局での調整目安である。
@@ -126,4 +133,4 @@ Microsoft VC、CUDA、OpenCL、OpenSSLのDLLや、ユーザーのプロフィー
 
 試験機はIntel Core i7-12650H、物理メモリ32,472MB。より低いCPU・メモリの最低条件は未検証。
 日本語IMEの実操作、専用GPUなしの別PC、異なるDPI・ディスプレイでの見え方は手動確認が必要。
-検証結果は [実行記録](../codex/task-status.json)、[受入測定](../codex/acceptance-v0.2.0.json)、[検証範囲](../codex/validation.md) を参照する。
+検証結果は [実行記録](../codex/task-status.json)、[受入測定](../codex/acceptance-v0.3.0.json)、[検証範囲](../codex/validation.md) を参照する。
