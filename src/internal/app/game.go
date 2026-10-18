@@ -26,6 +26,11 @@ const (
 type Analyzer interface {
 	Analyze(context.Context, engine.Position) (engine.Analysis, error)
 }
+
+// progressAnalyzer は途中通知に対応する解析器だけが実装する。通知は解析作業内で呼び、配列は以後変更しない。
+type progressAnalyzer interface {
+	AnalyzeProgress(context.Context, engine.Position, func(engine.Analysis)) (engine.Analysis, error)
+}
 type analysisJob struct {
 	ctx      context.Context
 	id       uint64
@@ -60,12 +65,15 @@ type Controller struct {
 	gameID       string
 	jobs         chan analysisJob
 	results      chan analysisResult
+	progress     chan analysisResult
 	stop         context.CancelFunc
 	done         chan struct{}
 	cancel       context.CancelFunc
 	generation   uint64
 	cpubegan     time.Time
 	cpuPresented int
+	reviewTurn   int
+	failedTurn   int
 }
 
 // NewController は1つの解析作業を開始する。呼出し元はCloseして終了を待つ。
@@ -74,7 +82,7 @@ func NewController(ctx context.Context, backend Analyzer, store *Store, rng *ran
 		return nil, errors.New("missing controller dependency")
 	}
 	life, stop := context.WithCancel(ctx)
-	c := &Controller{store: store, rng: rng, jobs: make(chan analysisJob, 1), results: make(chan analysisResult, 1), done: make(chan struct{}), stop: stop}
+	c := &Controller{store: store, rng: rng, jobs: make(chan analysisJob, 1), results: make(chan analysisResult, 1), progress: make(chan analysisResult, 1), done: make(chan struct{}), stop: stop}
 	// この作業だけがbackendを呼ぶ。1件の待機要求は更新時に置換し、送信待ちは取消で解除する。
 	go c.work(life, backend)
 	return c, nil
@@ -91,7 +99,11 @@ func (c *Controller) work(ctx context.Context, backend Analyzer) {
 			var a engine.Analysis
 			err := job.ctx.Err()
 			if err == nil {
-				a, err = backend.Analyze(job.ctx, job.position)
+				if progressive, ok := backend.(progressAnalyzer); ok {
+					a, err = progressive.AnalyzeProgress(job.ctx, job.position, func(a engine.Analysis) { c.publishProgress(job, a) })
+				} else {
+					a, err = backend.Analyze(job.ctx, job.position)
+				}
 			}
 			r := analysisResult{job.id, job.turn, a, err}
 			// 期限切れもUIへ通知する。古い未読結果だけを捨て、Busyが残ることを防ぐ。
@@ -109,6 +121,20 @@ func (c *Controller) work(ctx context.Context, backend Analyzer) {
 				}
 			}
 		}
+	}
+}
+
+// publishProgress は最新の途中通知1件だけを保持する。作業が単独送信し、UIが受信し、終了時にもcloseしない。
+func (c *Controller) publishProgress(job analysisJob, a engine.Analysis) {
+	r := analysisResult{id: job.id, turn: job.turn, analysis: a}
+	// 描画待ちでCPU着手の確定応答を遅らせないよう、途中通知は別キューで古い値を置換する。
+	select {
+	case <-c.progress:
+	default:
+	}
+	select {
+	case c.progress <- r:
+	default:
 	}
 }
 
@@ -218,11 +244,17 @@ func (c *Controller) endPosition() bool {
 	return false
 }
 
-// Poll は届いた結果を1件だけ適用し、世代・手数が一致しない古い応答を破棄する。
+// matchesAnalysis は現在の対局または再生要求に属する結果だけを受理する。
+func (c *Controller) matchesAnalysis(r analysisResult) bool {
+	return r.id == c.generation && c.Board != nil && r.turn >= 0 && r.turn < len(c.Evaluations) &&
+		(c.Phase == Review || c.Phase == Playing && r.turn == len(c.Board.Moves))
+}
+
+// Poll は確定応答を優先し、なければ途中評価だけを更新する。途中通知では着手せずBusyも解除しない。
 func (c *Controller) Poll() {
 	select {
 	case r := <-c.results:
-		if r.id != c.generation || c.Board == nil || r.turn < 0 || r.turn >= len(c.Evaluations) || c.Phase != Review && r.turn != len(c.Board.Moves) {
+		if !c.matchesAnalysis(r) {
 			return
 		}
 		c.Busy = false
@@ -232,9 +264,14 @@ func (c *Controller) Poll() {
 		}
 		if r.err != nil {
 			c.Err = r.err
+			c.failedTurn = r.turn
 			return
 		}
 		c.Evaluations[r.turn] = &r.analysis
+		if c.Phase == Review {
+			c.requestReviewAnalysis()
+			return
+		}
 		if c.Phase != Playing || c.Board.ToMove == c.Player {
 			return
 		}
@@ -253,6 +290,13 @@ func (c *Controller) Poll() {
 			c.request()
 		}
 	default:
+		select {
+		case r := <-c.progress:
+			if c.Busy && c.matchesAnalysis(r) {
+				c.Evaluations[r.turn] = &r.analysis
+			}
+		default:
+		}
 	}
 }
 
@@ -348,7 +392,7 @@ func (c *Controller) Snapshot(turn int) (*Board, error) {
 	return Replay(c.Board.Size, c.Board.Rule, slices.Clone(c.Board.Moves), turn)
 }
 
-// ReviewAt は指定手の独立盤面を返し、欠けた解析だけを補う。プロフィールへは反映しない。
+// ReviewAt は指定手の独立盤面を返し、現在と直前の不足解析を順に補う。プロフィールへは反映しない。
 func (c *Controller) ReviewAt(turn int) (*Board, error) {
 	if c.Phase != Finished && c.Phase != Review {
 		return nil, errors.New("game is not finished")
@@ -357,13 +401,35 @@ func (c *Controller) ReviewAt(turn int) (*Board, error) {
 	if err != nil {
 		return nil, err
 	}
+	if c.Phase == Review && c.Err != nil && c.failedTurn >= 0 && c.failedTurn < len(c.Evaluations) {
+		c.Evaluations[c.failedTurn] = nil
+	}
 	c.invalidate()
 	c.Phase = Review
 	c.Err = nil
-	if c.Evaluations[turn] == nil && b.Passes < 2 && !b.NoResult {
-		c.requestPosition(b, turn)
-	}
+	c.reviewTurn = turn
+	c.requestReviewAnalysis()
 	return b, nil
+}
+
+// requestReviewAnalysis は表示局面を優先し、その直前だけを補完する。連続パス・無勝負の終局は確定採点を使う。
+func (c *Controller) requestReviewAnalysis() {
+	for _, turn := range []int{c.reviewTurn, c.reviewTurn - 1} {
+		if turn < 0 || c.Evaluations[turn] != nil {
+			continue
+		}
+		b, err := c.Snapshot(turn)
+		if err != nil {
+			c.Err = err
+			c.failedTurn = turn
+			return
+		}
+		if b.Passes >= 2 || b.NoResult {
+			continue
+		}
+		c.requestPosition(b, turn)
+		return
+	}
 }
 
 // EndReview は補完解析を取り消して、保存済みの結果画面へ戻る。

@@ -24,7 +24,7 @@ func run() int {
 	}
 	root := flag.String("root", filepath.Dir(executable), "directory containing engine and profile")
 	screenshot := flag.String("screenshot", "", "save application screenshot and exit")
-	preview := flag.String("preview", "", "render a synthetic startup/game/scoring/result/review fixture; requires screenshot")
+	preview := flag.String("preview", "", "render a synthetic startup/game/game-wait/game-pass/scoring/result/choices/review/review-player/review-19 fixture; requires screenshot")
 	verify := flag.String("verify", "", "run CPU-to-render acceptance checks and write JSON; uses temporary profiles")
 	flag.Parse()
 	if err = gui.Run(gui.Options{Root: *root, Screenshot: *screenshot, Preview: *preview, Verify: *verify}); err != nil {

@@ -28,44 +28,46 @@ import (
 var fontData []byte
 
 type window struct {
-	face           *text.GoTextFace
-	frames         int
-	screenshot     string
-	captureErr     error
-	store          *app.Store
-	profiles       []app.Profile
-	broken         []string
-	selected       int
-	settings       app.Settings
-	engine         *engine.Managed
-	controller     *app.Controller
-	ready          chan error
-	engineDone     chan struct{}
-	engineCancel   context.CancelFunc
-	engineLoading  bool
-	engineError    error
-	actions        []hit
-	menu           *choiceMenu
-	dialog         *dialog
-	field          textinput.Field
-	notice         string
-	tab            int
-	shownPhase     app.Phase
-	dead           map[int]bool
-	seki           map[int]bool
-	scorePreview   app.Score
-	scoreError     string
-	markSeki       bool
-	animationStart time.Time
-	reviewTurn     int
-	reviewBoard    *app.Board
-	autoplay       bool
-	nextReplay     time.Time
-	previewMode    bool
-	verification   *verification
-	engineBegan    time.Time
-	inputCanvas    *ebiten.Image
-	inputScroll    float64
+	face                *text.GoTextFace
+	frames              int
+	screenshot          string
+	captureErr          error
+	store               *app.Store
+	profiles            []app.Profile
+	broken              []string
+	selected            int
+	settings            app.Settings
+	engine              *engine.Managed
+	controller          *app.Controller
+	ready               chan error
+	engineDone          chan struct{}
+	engineCancel        context.CancelFunc
+	engineLoading       bool
+	engineError         error
+	actions             []hit
+	menu                *choiceMenu
+	dialog              *dialog
+	field               textinput.Field
+	notice              string
+	tab                 int
+	shownPhase          app.Phase
+	dead                map[int]bool
+	seki                map[int]bool
+	scorePreview        app.Score
+	scoreError          string
+	markSeki            bool
+	animationStart      time.Time
+	resultPromptPending bool
+	reviewTurn          int
+	reviewBoard         *app.Board
+	reviewBefore        *app.Board
+	autoplay            bool
+	nextReplay          time.Time
+	previewMode         bool
+	verification        *verification
+	engineBegan         time.Time
+	inputCanvas         *ebiten.Image
+	inputScroll         float64
 }
 
 type Options struct{ Root, Screenshot, Preview, Verify string }
@@ -121,7 +123,7 @@ func Run(options Options) (result error) {
 		}
 		result = errors.Join(result, g.engine.Close())
 	}()
-	ebiten.SetWindowTitle("PlayGo(v0.1.0)")
+	ebiten.SetWindowTitle("PlayGo(v0.2.0)")
 	ebiten.SetWindowSize(1180, 800)
 	ebiten.SetWindowSizeLimits(885, 600, -1, -1)
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
@@ -170,13 +172,9 @@ func (g *window) Update() error {
 	}
 	if g.controller != nil {
 		g.controller.Poll()
-		if g.autoplay && g.controller.Phase == app.Review && !g.controller.Busy && time.Now().After(g.nextReplay) {
-			if g.reviewTurn >= len(g.controller.Board.Moves) {
-				g.autoplay = false
-			} else {
-				g.setReview(g.reviewTurn + 1)
-			}
-		}
+		g.syncPhase()
+		g.advanceResult(time.Now())
+		g.advanceReview(time.Now())
 	}
 	if g.verification != nil {
 		return g.updateVerification()
@@ -207,6 +205,7 @@ func (g *window) Update() error {
 func (g *window) Draw(screen *ebiten.Image) {
 	screen.Fill(tint(background))
 	g.actions = g.actions[:0]
+	g.syncPhase()
 	if g.controller == nil || g.controller.Phase == app.Idle {
 		g.drawStartup(screen)
 	} else {
@@ -224,7 +223,7 @@ func (g *window) Draw(screen *ebiten.Image) {
 	if g.controller != nil && !g.previewMode {
 		g.controller.RecordDisplayed()
 		if g.verification != nil && g.controller.Board != nil {
-			g.verification.displayedTurn = len(g.controller.Board.Moves)
+			g.recordVerificationDraw(time.Now())
 		}
 	}
 	g.frames++
@@ -235,6 +234,35 @@ func (g *window) Draw(screen *ebiten.Image) {
 		}
 		g.captureErr = err
 	}
+}
+
+// syncPhase は画面へ入るときだけ初期表示を設定し、同じ画面内のタブ選択を保持する。
+func (g *window) syncPhase() {
+	if g.controller == nil || g.shownPhase == g.controller.Phase {
+		return
+	}
+	phase := g.controller.Phase
+	switch phase {
+	case app.Playing:
+		if g.shownPhase != app.Scoring {
+			g.tab = 1
+		}
+		g.autoplay = false
+		g.reviewBoard = nil
+		g.reviewBefore = nil
+		g.resultPromptPending = false
+	case app.Review:
+		g.tab = 2
+	case app.Scoring:
+		g.prepareScore()
+	case app.Finished:
+		if g.shownPhase != app.Review {
+			g.animationStart = time.Now()
+			g.resultPromptPending = true
+		}
+		g.notice = ""
+	}
+	g.shownPhase = phase
 }
 
 // Layout は描画座標を固定してウィンドウの拡大縮小に追従する。

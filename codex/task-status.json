@@ -3,7 +3,44 @@
   "lineLimitPerTask": 10000,
   "tasksMerged": false,
   "implementationStatus": "Completed",
+  "implementationVersion": "v0.1.0",
   "validation": "validation.md",
+  "uxVersion": "v0.2.0",
+  "uxImplementationStatus": "Completed",
+  "uxTasks": [
+    {
+      "id":"UX-0","status":"Passed","result":"承認済みの色分け方針Aを対局・感想戦の要件へ反映。内容照合済み。","changedLines":20,
+      "files": ["/codex/要件_v0.2.0.md"]
+    },
+    {
+      "id":"UX-1","status":"Passed","changedLines":175,"result":"初期タブ・選択表示・CPUパス通知。関連テスト、fmt/vet/test/build Passed。",
+      "files": ["/src/internal/gui/gui.go","/src/internal/gui/playing.go","/src/internal/gui/results.go","/src/internal/gui/widgets.go","/src/internal/gui/playing_test.go"]
+    },
+    {
+      "id":"UX-2","status":"Passed","changedLines":94,"result":"感想戦の生存石へ着手番号を表示。パス・取り石・再着手・再生位置・4096手を検証。fmt/vet/test/build Passed。",
+      "files": ["/src/internal/gui/playing.go","/src/internal/gui/playing_test.go"]
+    },
+    {
+      "id":"UX-3","status":"Passed","changedLines":213,"result":"途中解析を最新1件の独立通知で描画へ渡し、確定応答を優先。取消・旧応答・満杯・配列不変を検証。fmt/vet/test/build/race Passed。実CPU時間はUX-7で測定。",
+      "files": ["/src/engine/client.go","/src/engine/managed.go","/src/engine/client_test.go","/src/internal/app/game.go","/src/internal/app/game_test.go","/src/internal/gui/playing.go"]
+    },
+    {
+      "id":"UX-4","status":"Passed","changedLines":325,"result":"手番別の盤面差分による助言と前後局面の自動補完。取り・救出・アタリ・連結・パス・旧補完取消を検証。fmt/vet/test/build/race Passed。",
+      "files": ["/src/internal/app/game.go","/src/internal/app/game_test.go","/src/internal/gui/gui.go","/src/internal/gui/review.go","/src/internal/gui/playing.go","/src/internal/gui/verification.go","/src/internal/gui/review_test.go"]
+    },
+    {
+      "id":"UX-5","status":"Passed","changedLines":324,"result":"演出後と感想戦終了後の3択を共通化。再保存・演出再開の防止、保存失敗からの再試行を検証。fmt/vet/test/build Passed。",
+      "files": ["/src/internal/gui/gui.go","/src/internal/gui/review.go","/src/internal/gui/results.go","/src/internal/gui/widgets.go","/src/internal/gui/results_test.go"]
+    },
+    {
+      "id":"UX-6","status":"Passed","changedLines":46,"result":"タイトル・配布名・READMEをv0.2.0へ整合。旧版測定は保持。既存プロフィール試験とfmt/vet/test/build Passed。",
+      "files": ["/src/internal/gui/gui.go","/src/tools/package/main.go","/src/tools/verify/main.go","/src/README.md","/src/README.txt"]
+    },
+    {
+      "id":"UX-7","status":"Passed","changedLines":2941,"result":"全体fmt/vet/test/build/race、10画面、ZIP整合性、実CPU96条件 Passed。CPU最大4812ms、色分けは着手前3694ms・着手後2801ms。色分け上限4500msを校正後に固定して別測定。",
+      "files": ["/src/internal/gui/gui.go","/src/internal/gui/verification.go","/src/internal/gui/playing.go","/src/internal/gui/review_test.go","/src/internal/gui/results_test.go","/src/tools/verify/main.go","/src/cmd/main.go","/src/README.md","/src/README.txt","/codex/validation.md","/src/internal/gui/verification_test.go","/codex/acceptance-v0.2.0.json","/src/internal/gui/playing_test.go","/src/internal/gui/review.go","/codex/ownership-calibration-v0.2.0.json"]
+    }
+  ],
   "tasks": [
     {"id":"T0","status":"Passed","result":"承認済み要件の最小修正。既存のユーザー変更を保持。"},
     {"id":"T1","status":"Implemented","result":"Go 1.26.4、Ebitengine 2.9.9、KataGo 1.17.1。初期AVX2比較から配布版はEigen/SSE2へ変更。i7-12650H・32,472MBで96条件Passed、最大4853ms、モデル準備2083ms。最低CPU・メモリの下限はNot run。"},

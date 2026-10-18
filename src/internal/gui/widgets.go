@@ -37,6 +37,12 @@ type dialog struct {
 	input                bool
 	submit               func(string) error
 	confirm              func() error
+	choices              []dialogChoice
+}
+
+type dialogChoice struct {
+	title  string
+	choose func() error
 }
 
 // tint は固定パレット値を不透明色へ変換する。
@@ -121,6 +127,15 @@ func (g *window) button(screen *ebiten.Image, r image.Rectangle, title string, e
 	}
 }
 
+// tabButton は選択中のタブを枠と下線で示す。
+func (g *window) tabButton(screen *ebiten.Image, r image.Rectangle, title string, selected bool, action func()) {
+	g.button(screen, r, title, true, action)
+	if selected {
+		vector.StrokeRect(screen, float32(r.Min.X), float32(r.Min.Y), float32(r.Dx()), float32(r.Dy()), 2, tint(accent), false)
+		rect(screen, image.Rect(r.Min.X, r.Max.Y-4, r.Max.X, r.Max.Y), accent)
+	}
+}
+
 // combo は選択値と選択リストを結ぶ。
 func (g *window) combo(screen *ebiten.Image, r image.Rectangle, title string, options []string, selected int, enabled bool, choose func(int)) {
 	value := "選択してください"
@@ -173,6 +188,10 @@ func (g *window) drawMenu(screen *ebiten.Image) {
 func (g *window) drawDialog(screen *ebiten.Image) {
 	d := g.dialog
 	g.overlay(screen)
+	if len(d.choices) > 0 {
+		g.drawChoiceDialog(screen, d)
+		return
+	}
 	rect(screen, image.Rect(325, 215, 855, 590), panel)
 	g.label(screen, d.title, 350, 237, 27, foreground)
 	g.label(screen, d.body, 350, 285, 18, muted)
@@ -200,4 +219,30 @@ func (g *window) drawDialog(screen *ebiten.Image) {
 		}
 		g.dismiss()
 	})
+}
+
+// chooseDialog は移動成功時だけ選択ウィンドウを閉じ、失敗時は再試行できるよう保持する。
+func (g *window) chooseDialog(index int) {
+	d := g.dialog
+	if d == nil || index < 0 || index >= len(d.choices) {
+		return
+	}
+	if err := d.choices[index].choose(); err != nil {
+		d.problem = "移動できませんでした。保存先を確認して再試行してください。"
+		return
+	}
+	g.dismiss()
+}
+
+// drawChoiceDialog は終了後の3つの行動を背面操作から分離して表示する。
+func (g *window) drawChoiceDialog(screen *ebiten.Image, d *dialog) {
+	rect(screen, image.Rect(325, 170, 855, 650), panel)
+	g.label(screen, d.title, 350, 196, 27, foreground)
+	g.label(screen, g.wrap(d.body, 475, 18, 2), 350, 249, 18, muted)
+	for i, choice := range d.choices {
+		y := 330 + i*68
+		g.button(screen, image.Rect(350, y, 830, y+54), choice.title, true, func() { g.chooseDialog(i) })
+	}
+	g.label(screen, g.wrap(d.problem, 475, 15, 2), 350, 529, 15, warning)
+	g.button(screen, image.Rect(685, 589, 830, 629), "閉じる", true, g.dismiss)
 }

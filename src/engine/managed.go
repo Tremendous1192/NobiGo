@@ -34,10 +34,15 @@ func (m *Managed) Prepare(ctx context.Context) error {
 
 // Analyze は要求を直列実行し、失敗したプロセスを回収する。次の要求で再起動する。
 func (m *Managed) Analyze(ctx context.Context, p Position) (Analysis, error) {
+	return m.AnalyzeProgress(ctx, p, nil)
+}
+
+// AnalyzeProgress は途中通知付きの解析を直列実行する。通知の非待機・読取り専用条件はClientと同じ。
+func (m *Managed) AnalyzeProgress(ctx context.Context, p Position, notify func(Analysis)) (Analysis, error) {
 	if err := m.Prepare(ctx); err != nil {
 		return Analysis{}, err
 	}
-	a, err := m.client.Analyze(ctx, p)
+	a, err := m.client.AnalyzeProgress(ctx, p, notify)
 	// 通常の待った・背景解析取消は、プロセスを再利用して次の着手を遅らせない。
 	closed := false
 	select {

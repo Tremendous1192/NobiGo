@@ -6,11 +6,12 @@ import (
 	"image"
 	"image/color"
 	"math"
-	"time"
+	"strconv"
 
 	"github.com/Tremendous1192/PlayGo/engine"
 	"github.com/Tremendous1192/PlayGo/internal/app"
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/text/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
@@ -48,16 +49,6 @@ func (g *window) currentAnalysis(turn int) *engine.Analysis {
 // drawActive は対局画面の共通枠を描く。
 func (g *window) drawActive(screen *ebiten.Image) {
 	c := g.controller
-	if g.shownPhase != c.Phase {
-		if c.Phase == app.Scoring {
-			g.prepareScore()
-		}
-		if c.Phase == app.Finished {
-			g.animationStart = time.Now()
-			g.notice = ""
-		}
-		g.shownPhase = c.Phase
-	}
 	if c.Phase == app.Scoring {
 		g.drawScoring(screen)
 		return
@@ -88,7 +79,12 @@ func (g *window) drawActive(screen *ebiten.Image) {
 	if c.Err != nil {
 		status = "解析できませんでした。再試行するか、中止してください。"
 	}
-	g.label(screen, status, 38, 80, 20, accent)
+	statusColor := accent
+	if cpuPassed(b, c.Player) && c.Err == nil {
+		status = "CPU（" + colorName(c.Player.Other()) + "）がパスしました。あなたの番です。"
+		statusColor = warning
+	}
+	g.label(screen, status, 38, 80, 20, statusColor)
 	a := g.currentAnalysis(turn)
 	g.drawBoard(screen, b, a, nil, nil, c.Phase == app.Playing && b.ToMove == c.Player)
 	g.drawSidebar(screen, b, turn)
@@ -137,9 +133,10 @@ func (g *window) drawBoard(screen *ebiten.Image, b *app.Board, a *engine.Analysi
 			if math.Abs(v) < .2 {
 				continue
 			}
-			c := color.RGBA{R: 53, G: 125, B: 227, A: uint8(95 * math.Abs(v))}
+			// RGBAへ未乗算のRGBを渡すと加算色になるため、透明度を持つ領域はNRGBAで合成する。
+			c := color.NRGBA{R: 53, G: 125, B: 227, A: uint8(140 * math.Abs(v))}
 			if v < 0 {
-				c = color.RGBA{R: 228, G: 78, B: 84, A: uint8(95 * math.Abs(v))}
+				c = color.NRGBA{R: 228, G: 78, B: 84, A: uint8(140 * math.Abs(v))}
 			}
 			x, y := 70+float64(p%b.Size)*step, 155+float64(p/b.Size)*step
 			vector.DrawFilledRect(screen, float32(x-step*.48), float32(y-step*.48), float32(step*.96), float32(step*.96), c, false)
@@ -163,6 +160,10 @@ func (g *window) drawBoard(screen *ebiten.Image, b *app.Board, a *engine.Analysi
 			vector.DrawFilledCircle(screen, float32(70+float64(x)*step), float32(155+float64(y)*step), 3, tint(0x654d32), true)
 		}
 	}
+	var numbers []int
+	if g.controller.Phase == app.Review {
+		numbers = stoneMoveNumbers(b)
+	}
 	for p, c := range b.Cells {
 		if c == app.Empty {
 			continue
@@ -184,7 +185,14 @@ func (g *window) drawBoard(screen *ebiten.Image, b *app.Board, a *engine.Analysi
 			vector.StrokeCircle(screen, x, y, r*.75, 2, tint(0x46c9b2), true)
 		}
 		if len(b.Moves) > 0 && b.Moves[len(b.Moves)-1].Point == p {
-			vector.StrokeCircle(screen, x, y, r*.28, 2, tint(0xe9ad41), true)
+			markRadius := r * .28
+			if numbers != nil {
+				markRadius = r * .91
+			}
+			vector.StrokeCircle(screen, x, y, markRadius, 2, tint(0xe9ad41), true)
+		}
+		if numbers != nil && numbers[p] > 0 {
+			g.drawStoneNumber(screen, numbers[p], float64(x), float64(y), float64(r), c)
 		}
 	}
 	if interactive {
@@ -202,15 +210,57 @@ func (g *window) drawBoard(screen *ebiten.Image, b *app.Board, a *engine.Analysi
 	}
 }
 
+// stoneMoveNumbers は再生中の棋譜から現在盤上に残る石の着手番号を求め、保存形式を増やさない。
+func stoneMoveNumbers(b *app.Board) []int {
+	numbers := make([]int, len(b.Cells))
+	for i, m := range b.Moves {
+		if m.Point >= 0 && m.Point < len(b.Cells) && b.Cells[m.Point] == m.Color {
+			numbers[m.Point] = i + 1
+		}
+	}
+	return numbers
+}
+
+// drawStoneNumber は石の直径に合わせて数字を中央へ描き、4桁の番号も石の内側へ収める。
+func (g *window) drawStoneNumber(screen *ebiten.Image, number int, x, y, radius float64, stone app.Color) {
+	value := strconv.Itoa(number)
+	size := math.Min(22, radius*1.1)
+	g.face.Size = size
+	width, _ := text.Measure(value, g.face, size*1.5)
+	if width > radius*1.65 {
+		size *= radius * 1.65 / width
+		g.face.Size = size
+		width, _ = text.Measure(value, g.face, size*1.5)
+	}
+	c := foreground
+	if stone == app.White {
+		c = background
+	}
+	g.label(screen, value, x-width/2, y-size*.72, size, c)
+}
+
 // drawSidebar は解析済みの値と履歴を表示する。欠損区間を補間して確定値に見せない。
 func (g *window) drawSidebar(screen *ebiten.Image, b *app.Board, turn int) {
 	c := g.controller
 	rect(screen, image.Rect(660, 120, 1145, 720), panel)
-	g.label(screen, fmt.Sprintf("%d手目  ·  %s番", turn, colorName(b.ToMove)), 680, 132, 24, foreground)
-	g.label(screen, "青：黒の推定領域  /  赤：白の推定領域", 680, 172, 16, muted)
+	heading := fmt.Sprintf("%d手目  ·  %s番", turn, colorName(b.ToMove))
+	headingColor := foreground
+	if cpuPassed(b, c.Player) {
+		heading = fmt.Sprintf("%d手目  ·  CPUがパス", turn)
+		headingColor = warning
+	}
+	g.label(screen, heading, 680, 132, 24, headingColor)
+	a := g.currentAnalysis(turn)
+	legend, legendColor := "青：黒の推定領域  /  赤：白の推定領域", muted
+	if a == nil {
+		legend, legendColor = "解析待ち  ·  青：黒 / 赤：白", warning
+	}
+	if c.Phase == app.Review && turn == len(c.Board.Moves) && a == nil {
+		legend, legendColor = "確定採点の領域  ·  青：黒 / 赤：白", muted
+	}
+	g.label(screen, legend, 680, 172, 16, legendColor)
 	g.plot(screen, image.Rect(700, 230, 1120, 315), turn, false)
 	g.plot(screen, image.Rect(700, 355, 1120, 420), turn, true)
-	a := g.currentAnalysis(turn)
 	eval := "目差 —    勝率 —"
 	if a != nil {
 		score, win := a.ScoreLead, a.Winrate
@@ -228,22 +278,20 @@ func (g *window) drawSidebar(screen *ebiten.Image, b *app.Board, turn int) {
 	g.label(screen, lossText, 680, 478, 18, muted)
 	caption := "あなた側の予測値"
 	if b.Rule == app.Jungo {
-		caption = "純碁の途中評価は近似です"
+		caption = "あなた側の予測値（近似）"
 	}
 	if a != nil && a.Partial {
 		caption += "・時間内の途中結果"
 	}
 	g.label(screen, caption, 680, 509, 15, warning)
-	g.button(screen, image.Rect(680, 541, 890, 581), "情報", true, func() { g.tab = 0 })
-	g.button(screen, image.Rect(904, 541, 1125, 581), "コメント", true, func() { g.tab = 1 })
+	tabs := []string{"情報", "コメント"}
 	if c.Phase == app.Review {
-		// 感想戦では3つの独立した選択肢を同じ列へ配置する。
-		g.actions = g.actions[:len(g.actions)-2]
-		rect(screen, image.Rect(680, 541, 1125, 581), panel)
-		for i, title := range []string{"情報", "コメント", "アドバイス"} {
-			x := 680 + i*150
-			g.button(screen, image.Rect(x, 541, x+140, 581), title, true, func() { g.tab = i })
-		}
+		tabs = append(tabs, "アドバイス")
+	}
+	width := 450 / len(tabs)
+	for i, title := range tabs {
+		x := 680 + i*width
+		g.tabButton(screen, image.Rect(x, 541, x+width-10, 581), title, g.tab == i, func() { g.tab = i })
 	}
 	body := fmt.Sprintf("%s / コミ %.1f\nCPU強度はこの対局中、固定です。\n棋力 %s · 専用GPU不要", ruleName(b.Rule), app.Komi(b.Rule), app.RankName(c.Profile.Ranks[app.RuleIndex(b.Rule)]))
 	if c.LastCPUTime > 0 {
@@ -253,7 +301,7 @@ func (g *window) drawSidebar(screen *ebiten.Image, b *app.Board, turn int) {
 		body = positionComment(b)
 	}
 	if g.tab == 2 && c.Phase == app.Review {
-		body = reviewAdvice(c, turn)
+		body = reviewAdvice(c, turn, g.reviewBefore, b)
 	}
 	if c.Err != nil {
 		body = "解析に失敗しました。\n「解析を再試行」でエンジンを再接続できます。"
@@ -264,7 +312,7 @@ func (g *window) drawSidebar(screen *ebiten.Image, b *app.Board, turn int) {
 	if c.CPUDeadlineMiss {
 		body = "このPCで5秒を超える応答がありました。\n性能条件は未達です。再試行か中止を選べます。"
 	}
-	g.label(screen, g.wrap(body, 445, 17, 4), 680, 601, 17, muted)
+	g.label(screen, g.wrap(body, 445, 16, 5), 680, 591, 16, muted)
 }
 
 // plot は人側視点の評価を描き、未解析の区間は線を切る。
@@ -316,6 +364,15 @@ func (g *window) plot(screen *ebiten.Image, r image.Rectangle, turn int, winrate
 	g.label(screen, bottom, float64(r.Max.X-47), float64(r.Max.Y+2), 12, muted)
 }
 
+// cpuPassed は現在の棋譜の最終手だけを参照し、待ったや次局へ通知を持ち越さない。
+func cpuPassed(b *app.Board, player app.Color) bool {
+	if b == nil || len(b.Moves) == 0 {
+		return false
+	}
+	last := b.Moves[len(b.Moves)-1]
+	return last.Point == -1 && last.Color == player.Other()
+}
+
 // positionComment は盤面から検証できる短い説明だけを返す。
 func positionComment(b *app.Board) string {
 	if len(b.Moves) == 0 {
@@ -323,7 +380,11 @@ func positionComment(b *app.Board) string {
 	}
 	last := b.Moves[len(b.Moves)-1]
 	if last.Point < 0 {
-		return "パスしました。双方が続けてパスすると終局です。\n純碁では、死石も実際に取ってから終局します。"
+		message := "パスしました。双方が続けてパスすると終局です。"
+		if b.Rule == app.Jungo {
+			return message + "\n純碁では、死石も実際に取ってから終局します。"
+		}
+		return message + "\n取れる石と、守る必要がある石を確認しましょう。"
 	}
 	_, libs := b.Group(last.Point)
 	if len(libs) == 1 {

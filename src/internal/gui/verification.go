@@ -16,33 +16,48 @@ import (
 )
 
 type acceptanceCase struct {
-	Rule         app.Rule `json:"rule"`
-	Size         int      `json:"size"`
-	Difficulty   int      `json:"difficulty"`
-	Position     string   `json:"position"`
-	Action       string   `json:"action,omitempty"`
-	Moves        int      `json:"moves"`
-	Milliseconds int64    `json:"milliseconds"`
-	Passed       bool     `json:"passed"`
-	Error        string   `json:"error,omitempty"`
+	Rule                           app.Rule `json:"rule"`
+	Size                           int      `json:"size"`
+	Difficulty                     int      `json:"difficulty"`
+	Position                       string   `json:"position"`
+	Action                         string   `json:"action,omitempty"`
+	Moves                          int      `json:"moves"`
+	Milliseconds                   int64    `json:"milliseconds"`
+	Passed                         bool     `json:"passed"`
+	Error                          string   `json:"error,omitempty"`
+	OwnershipMilliseconds          int64    `json:"ownershipMilliseconds,omitempty"`
+	OwnershipStatus                string   `json:"ownershipStatus,omitempty"`
+	BeforeCPUOwnershipMilliseconds int64    `json:"beforeCPUOwnershipMilliseconds,omitempty"`
+	BeforeCPUOwnershipStatus       string   `json:"beforeCPUOwnershipStatus,omitempty"`
 }
+
+// 2026-10-18の96条件の最大3529msに25%の余裕を加え、500ms単位で切り上げた検証上限。
+const ownershipLimitMilliseconds int64 = 4500
+
 type verification struct {
-	StartupMS     int64            `json:"startupMilliseconds"`
-	Cases         []acceptanceCase `json:"cases"`
-	Passed        bool             `json:"passed"`
-	Method        string           `json:"method"`
-	output        string
-	index         int
-	active        bool
-	profile       app.Profile
-	expectedTurn  int
-	displayedTurn int
-	began         time.Time
+	StartupMS               int64            `json:"startupMilliseconds"`
+	Cases                   []acceptanceCase `json:"cases"`
+	Passed                  bool             `json:"passed"`
+	Method                  string           `json:"method"`
+	OwnershipLimitMS        int64            `json:"ownershipLimitMilliseconds"`
+	output                  string
+	index                   int
+	active                  bool
+	profile                 app.Profile
+	expectedTurn            int
+	displayedTurn           int
+	began                   time.Time
+	cpuComplete             bool
+	positionShownAt         time.Time
+	ownershipShown          bool
+	ownershipMS             int64
+	beforeCPUOwnershipShown bool
+	beforeCPUOwnershipMS    int64
 }
 
 // newVerification は全90条件とCPU先手・プレイヤーパスの6条件を順番に測る。
 func newVerification(output string) *verification {
-	v := &verification{output: output, Passed: true, Method: "legal generated positions; accepted player move to completed Draw callback; excludes startup; not OS compositor latency"}
+	v := &verification{output: output, Passed: true, OwnershipLimitMS: ownershipLimitMilliseconds, Method: "CPU: accepted player action to Draw completion; beforeCPUOwnership: accepted action to first valid ownership Draw; ownership: CPU-result board first Draw to first valid ownership Draw; final scoring excluded; startup separate; not OS compositor latency"}
 	for _, rule := range []app.Rule{app.Japanese, app.Chinese, app.Jungo} {
 		for _, size := range []int{7, 9, 11, 13, 15, 19} {
 			for difficulty := 0; difficulty < 5; difficulty++ {
@@ -123,6 +138,9 @@ func (g *window) updateVerification() error {
 	}
 	current := &v.Cases[v.index]
 	if !v.active {
+		v.cpuComplete = false
+		v.beforeCPUOwnershipShown = false
+		v.beforeCPUOwnershipMS = 0
 		s := app.Settings{Rule: current.Rule, Size: current.Size, Difficulty: current.Difficulty, Side: 0}
 		if current.Action == "cpu-opening" {
 			s.Side = 1
@@ -174,14 +192,17 @@ func (g *window) updateVerification() error {
 		v.active = true
 		return nil
 	}
-	if c.Err != nil || time.Since(v.began) > 8*time.Second {
+	if c.Err != nil || !v.cpuComplete && time.Since(v.began) > 8*time.Second {
 		current.Error = "request failed or exceeded watchdog"
 		if c.Err != nil {
 			current.Error = c.Err.Error()
 		}
-		current.Milliseconds = time.Since(v.began).Milliseconds()
+		if !v.cpuComplete {
+			current.Milliseconds = time.Since(v.began).Milliseconds()
+		}
+		current.Passed = false
 		v.Passed = false
-	} else if len(c.Board.Moves) >= v.expectedTurn && v.displayedTurn >= v.expectedTurn {
+	} else if !v.cpuComplete && len(c.Board.Moves) >= v.expectedTurn && v.displayedTurn >= v.expectedTurn {
 		current.Milliseconds = c.LastCPUTime.Milliseconds()
 		if current.Action == "cpu-opening" {
 			// 開始時の設定保存も含め、計測開始が早い側を採る。
@@ -192,10 +213,33 @@ func (g *window) updateVerification() error {
 			v.Passed = false
 			current.Error = "display deadline exceeded"
 		}
-	} else {
+		v.cpuComplete = true
+	} else if !v.cpuComplete {
 		return nil
 	}
-	fmt.Printf("acceptance %d/%d %s %dx%d level=%d %s %dms passed=%v\n", v.index+1, len(v.Cases), current.Rule, current.Size, current.Size, current.Difficulty, current.Position, current.Milliseconds, current.Passed)
+	if current.Passed {
+		if c.Phase == app.Scoring {
+			current.OwnershipStatus = "Not applicable: final scoring"
+		} else if v.ownershipShown {
+			current.OwnershipMilliseconds = v.ownershipMS
+			current.OwnershipStatus = "Measured"
+		} else if !v.positionShownAt.IsZero() && time.Since(v.positionShownAt) < 8*time.Second {
+			return nil
+		} else {
+			current.Passed, v.Passed = false, false
+			current.Error = "ownership display missing"
+		}
+	}
+	current.BeforeCPUOwnershipStatus = "Not observed: CPU move prioritized"
+	if v.beforeCPUOwnershipShown {
+		current.BeforeCPUOwnershipStatus = "Measured"
+		current.BeforeCPUOwnershipMilliseconds = v.beforeCPUOwnershipMS
+	}
+	if current.Passed && v.OwnershipLimitMS > 0 && (current.OwnershipMilliseconds > v.OwnershipLimitMS || current.BeforeCPUOwnershipMilliseconds > v.OwnershipLimitMS) {
+		current.Passed, v.Passed = false, false
+		current.Error = "ownership display deadline exceeded"
+	}
+	fmt.Printf("acceptance %d/%d %s %dx%d level=%d %s CPU=%dms ownership=%dms passed=%v\n", v.index+1, len(v.Cases), current.Rule, current.Size, current.Size, current.Difficulty, current.Position, current.Milliseconds, current.OwnershipMilliseconds, current.Passed)
 	c.Abort()
 	v.index++
 	v.active = false
@@ -203,6 +247,26 @@ func (g *window) updateVerification() error {
 		return errors.Join(g.saveVerification(), fmt.Errorf("acceptance failed: %s", current.Error))
 	}
 	return nil
+}
+
+// recordVerificationDraw は現在局面が描かれた時刻と、最初の有効な色分けの描画時刻だけを記録する。
+func (g *window) recordVerificationDraw(now time.Time) {
+	v := g.verification
+	turn := len(g.controller.Board.Moves)
+	if v.displayedTurn != turn {
+		v.displayedTurn = turn
+		v.positionShownAt = now
+		v.ownershipShown = false
+		v.ownershipMS = 0
+	}
+	if a := g.currentAnalysis(turn); !v.ownershipShown && a != nil && len(a.Ownership) == len(g.controller.Board.Cells) {
+		v.ownershipShown = true
+		v.ownershipMS = now.Sub(v.positionShownAt).Milliseconds()
+		if turn == v.expectedTurn-1 && !v.beforeCPUOwnershipShown {
+			v.beforeCPUOwnershipShown = true
+			v.beforeCPUOwnershipMS = now.Sub(v.began).Milliseconds()
+		}
+	}
 }
 
 // saveVerification は個人情報を含まない結果だけを書き出す。
@@ -216,7 +280,14 @@ func (g *window) saveVerification() error {
 
 // preparePreview は画面確認専用の合成例を作る。実測や実対局の結果には使用しない。
 func (g *window) preparePreview(mode string) error {
-	b, err := fixtureBoard(9, app.Japanese, 32)
+	size, moves := 9, 32
+	if mode == "review-19" {
+		size, moves = 19, 220
+	}
+	if mode == "game-pass" {
+		moves = 31
+	}
+	b, err := fixtureBoard(size, app.Japanese, moves)
 	if err != nil {
 		return err
 	}
@@ -230,7 +301,12 @@ func (g *window) preparePreview(mode string) error {
 		return nil
 	}
 	g.notice = ""
-	if mode != "game" {
+	if mode == "game-pass" {
+		if err = b.Play(-1); err != nil {
+			return err
+		}
+	}
+	if mode != "game" && mode != "game-wait" && mode != "game-pass" {
 		if err = b.Play(-1); err != nil {
 			return err
 		}
@@ -263,16 +339,40 @@ func (g *window) preparePreview(mode string) error {
 	c.Score = score
 	switch mode {
 	case "game":
+	case "game-pass":
+	case "game-wait":
+		c.Evaluations[len(b.Moves)] = nil
 	case "scoring":
 		c.Phase = app.Scoring
-	case "result":
+	case "result", "choices":
 		c.Phase = app.Finished
 		g.shownPhase = app.Finished
 		g.animationStart = time.Now().Add(-2 * time.Second)
-	case "review":
+		if mode == "choices" {
+			g.openResultChoices()
+		}
+	case "review", "review-19", "review-player":
 		c.Phase = app.Review
 		g.reviewTurn = 12
-		g.reviewBoard, err = c.Snapshot(12)
+		if mode == "review-19" {
+			g.reviewTurn = 200
+		}
+		if mode == "review-player" {
+			g.reviewTurn = 13
+		}
+		g.reviewBoard, err = c.Snapshot(g.reviewTurn)
+		if err == nil {
+			g.reviewBefore, err = c.Snapshot(g.reviewTurn - 1)
+		}
+		if err == nil && mode == "review-player" {
+			c.Evaluations[12].ScoreLead, c.Evaluations[13].ScoreLead = 8, 2
+			for point := range g.reviewBefore.Cells {
+				if point != c.Board.Moves[12].Point && g.reviewBefore.Legal(point) {
+					c.Evaluations[12].Moves = []engine.Candidate{{Point: point}}
+					break
+				}
+			}
+		}
 		g.tab = 2
 	default:
 		return errors.New("unknown preview mode")

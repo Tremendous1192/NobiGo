@@ -409,6 +409,12 @@ func (c *Client) cancelQuery(id string) {
 
 // Analyze は取消可能な直列解析を行う。期限時に有効な途中結果があれば返すが、通常の取消では返さない。
 func (c *Client) Analyze(ctx context.Context, p Position) (Analysis, error) {
+	return c.AnalyzeProgress(ctx, p, nil)
+}
+
+// AnalyzeProgress は有効な途中解析を同じgoroutineで通知する。notifyはnil可、待機や配列の変更は禁止。
+// 通知後も探索を続け、戻り値だけを着手確定に使う。通知配列は以後変更せず、読取り専用として転送できる。
+func (c *Client) AnalyzeProgress(ctx context.Context, p Position, notify func(Analysis)) (Analysis, error) {
 	ctx, cancel := context.WithTimeout(ctx, 3500*time.Millisecond)
 	defer cancel()
 	select {
@@ -451,6 +457,9 @@ func (c *Client) Analyze(ctx context.Context, p Position) (Analysis, error) {
 				return a, nil
 			}
 			latest = &a
+			if notify != nil {
+				notify(a)
+			}
 		case <-ctx.Done():
 			c.cancelQuery(id)
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) && latest != nil {

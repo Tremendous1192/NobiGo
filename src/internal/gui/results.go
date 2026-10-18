@@ -101,7 +101,12 @@ func (g *window) drawScoring(screen *ebiten.Image) {
 	if b.NoResult {
 		caption = "同一局面の反復による無勝負です。棋力調整には使用しません。"
 	}
-	g.label(screen, caption, 38, 82, 19, muted)
+	captionColor := muted
+	if cpuPassed(b, c.Player) {
+		caption = "CPUがパスし、連続パスで終局しました。点数と盤上の印を確認してください。"
+		captionColor = warning
+	}
+	g.label(screen, caption, 38, 82, 19, captionColor)
 	g.drawBoard(screen, b, scoreOwnership(s), s.DeadMask, s.SekiMask, false)
 	if b.Rule != app.Jungo && !b.NoResult {
 		g.actions = append(g.actions, hit{image.Rect(42, 127, 629, 714), func() { x, y := ebiten.CursorPosition(); g.toggleMark(boardPoint(x, y, b.Size)) }})
@@ -153,18 +158,50 @@ func (g *window) updateSelectedProfile() {
 }
 
 // nextGame は完了したプロフィールで次局を始める。
-func (g *window) nextGame() {
+func (g *window) nextGame() error {
 	c := g.controller
 	if err := c.Start(c.Profile, c.Settings); err != nil {
 		g.notice = "次の対局を開始できません。保存先と他の起動中アプリを確認してください。"
-		return
+		return err
 	}
 	g.updateSelectedProfile()
 	g.notice = ""
-	g.tab = 0
+	return nil
 }
 
-// drawResult は短い計数と勝利演出の後も選択肢を操作可能にする。
+// advanceResult は計数・勝利演出が終わった後に一度だけ次の行動を提示する。
+func (g *window) advanceResult(now time.Time) {
+	if g.controller.Phase == app.Finished && g.resultPromptPending && g.dialog == nil && now.Sub(g.animationStart) >= 900*time.Millisecond {
+		g.openResultChoices()
+	}
+}
+
+// openResultChoices は保存済みの結果から次の行動だけを選び、再保存しない。
+func (g *window) openResultChoices() {
+	if g.controller == nil || g.controller.Phase != app.Finished {
+		return
+	}
+	g.resultPromptPending = false
+	g.dialog = &dialog{
+		title: "次にどうしますか？",
+		body:  "一局おつかれさまでした。振り返りも、次の一局も、あなたのペースで。",
+		choices: []dialogChoice{
+			{title: "感想戦で振り返る", choose: func() error { g.autoplay = false; return g.setReview(0) }},
+			{title: "次のゲームを行う", choose: g.nextGame},
+			{title: "最初の画面に戻る", choose: func() error { g.controller.Abort(); g.notice = ""; return nil }},
+		},
+	}
+}
+
+// finishReview は補完解析と再生を停止して行動選択へ戻る。採点演出と結果保存は繰り返さない。
+func (g *window) finishReview() {
+	g.autoplay = false
+	g.controller.EndReview()
+	g.syncPhase()
+	g.openResultChoices()
+}
+
+// drawResult は計数と勝利演出を描き、閉じた行動選択も再度開けるようにする。
 func (g *window) drawResult(screen *ebiten.Image) {
 	c := g.controller
 	s := c.Score
@@ -201,10 +238,8 @@ func (g *window) drawResult(screen *ebiten.Image) {
 			vector.DrawFilledCircle(screen, x, y, 4, tint(accent), true)
 		}
 	}
-	g.label(screen, "次にどうしますか？", 685, 394, 25, foreground)
-	g.button(screen, image.Rect(685, 447, 1120, 505), "感想戦で振り返る", true, func() { g.autoplay = false; g.tab = 0; g.setReview(0) })
-	g.button(screen, image.Rect(685, 521, 1120, 579), "次のゲームを行う", true, g.nextGame)
-	g.button(screen, image.Rect(685, 595, 1120, 653), "最初の画面に戻る", true, func() { c.Abort(); g.notice = "" })
+	g.label(screen, "次の一局も、あなたのペースで。", 685, 394, 22, foreground)
+	g.button(screen, image.Rect(685, 447, 1120, 505), "次の行動を選ぶ", progress >= 1, g.openResultChoices)
 	if g.notice != "" {
 		g.label(screen, g.wrap(g.notice, 440, 16, 2), 685, 665, 16, warning)
 	}

@@ -1,6 +1,6 @@
 // 作成日: 2026-10-18。生成ZIPを新しい一時フォルダーへ展開し、ハッシュ・画面・実CPU着手を確認する。
 
-// Verify はsrcから実行し、配布物の受入測定をcodex/acceptance.jsonへ記録する。実プレイヤー情報は扱わない。
+// Verify はsrcから実行し、配布物の受入測定をcodex/acceptance-v0.2.0.jsonへ記録する。実プレイヤー情報は扱わない。
 package main
 
 import (
@@ -45,7 +45,7 @@ func run() (result error) {
 		return err
 	}
 	defer func() { result = errors.Join(result, os.RemoveAll(temp)) }()
-	archive := filepath.Join(root, "..", "dist", "PlayGo-v0.1.0-windows-amd64.zip")
+	archive := filepath.Join(root, "..", "dist", "PlayGo-v0.2.0-windows-amd64.zip")
 	want, err := os.ReadFile(archive + ".sha256")
 	if err != nil {
 		return err
@@ -64,17 +64,17 @@ func run() (result error) {
 	if err = verifyContents(appDir); err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
 	exe := filepath.Join(appDir, "PlayGo.exe")
-	for _, mode := range []string{"startup", "game", "scoring", "result", "review"} {
-		cmd := exec.CommandContext(ctx, exe, "-preview", mode, "-screenshot", filepath.Join(work, "package-"+mode+".png"))
+	for _, mode := range []string{"startup", "game", "game-wait", "game-pass", "scoring", "result", "choices", "review", "review-player", "review-19"} {
+		cmd := exec.CommandContext(ctx, exe, "-preview", mode, "-screenshot", filepath.Join(work, "package-v0.2.0-"+mode+".png"))
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		if err = cmd.Run(); err != nil {
 			return fmt.Errorf("package screen %s: %w", mode, err)
 		}
 	}
-	cmd := exec.CommandContext(ctx, exe, "-verify", filepath.Join(root, "..", "codex", "acceptance.json"))
+	cmd := exec.CommandContext(ctx, exe, "-verify", filepath.Join(root, "..", "codex", "acceptance-v0.2.0.json"))
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err = cmd.Run(); err != nil {
 		return fmt.Errorf("package acceptance: %w", err)

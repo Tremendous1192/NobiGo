@@ -62,6 +62,15 @@ func helperEngine(mode string) error {
 		if mode == "short" {
 			r.Ownership = nil
 		}
+		if mode == "stream" {
+			r.During = true
+			r.Ownership[0] = .5
+			if err := encode.Encode(r); err != nil {
+				return err
+			}
+			r.During = false
+			r.Ownership[0] = .9
+		}
 		if mode == "partial" && count == 1 {
 			r.During = true
 			if err := encode.Encode(r); err != nil {
@@ -74,6 +83,41 @@ func helperEngine(mode string) error {
 		}
 	}
 	return scan.Err()
+}
+
+// TestAnalyzeProgressBeforeFinal は有効な途中通知と確定値を区別し、通知後の配列が変更されないことを検証する。
+func TestAnalyzeProgressBeforeFinal(t *testing.T) {
+	c := fakeClient(t, "stream")
+	var updates []Analysis
+	a, err := c.AnalyzeProgress(context.Background(), testPosition(), func(a Analysis) { updates = append(updates, a) })
+	if err != nil || len(updates) != 1 || !updates[0].Partial || a.Partial || updates[0].Ownership[0] != .5 || a.Ownership[0] != .9 {
+		t.Fatalf("progress or final response incorrect: updates=%d err=%v", len(updates), err)
+	}
+}
+
+// TestCancelAfterProgress は途中通知後の通常取消で着手候補を返さず、次の解析を受理することを検証する。
+func TestCancelAfterProgress(t *testing.T) {
+	c := fakeClient(t, "partial")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	notified := false
+	_, err := c.AnalyzeProgress(ctx, testPosition(), func(Analysis) { notified = true; cancel() })
+	if !notified || !errors.Is(err, context.Canceled) {
+		t.Fatalf("progress cancellation: notified=%v err=%v", notified, err)
+	}
+	if _, err := c.Analyze(context.Background(), testPosition()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestInvalidProgressNeverPublished は欠損応答を途中描画へ渡さないことを検証する。
+func TestInvalidProgressNeverPublished(t *testing.T) {
+	c := fakeClient(t, "short")
+	notified := false
+	_, err := c.AnalyzeProgress(context.Background(), testPosition(), func(Analysis) { notified = true })
+	if err == nil || notified {
+		t.Fatal("invalid response published")
+	}
 }
 
 // fakeClient はOSの子プロセスとして偽エンジンを起動し、テスト終了時に回収する。
