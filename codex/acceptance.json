@@ -1,0 +1,877 @@
+{
+  "startupMilliseconds": 2083,
+  "cases": [
+    {
+      "rule": "japanese",
+      "size": 7,
+      "difficulty": 0,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 2706,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 7,
+      "difficulty": 1,
+      "position": "middle",
+      "moves": 16,
+      "milliseconds": 3696,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 7,
+      "difficulty": 2,
+      "position": "late",
+      "moves": 36,
+      "milliseconds": 4771,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 7,
+      "difficulty": 3,
+      "position": "middle",
+      "moves": 16,
+      "milliseconds": 4806,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 7,
+      "difficulty": 4,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4719,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 9,
+      "difficulty": 0,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4781,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 9,
+      "difficulty": 1,
+      "position": "middle",
+      "moves": 27,
+      "milliseconds": 4712,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 9,
+      "difficulty": 2,
+      "position": "late",
+      "moves": 60,
+      "milliseconds": 4821,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 9,
+      "difficulty": 3,
+      "position": "middle",
+      "moves": 27,
+      "milliseconds": 4759,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 9,
+      "difficulty": 4,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4602,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 11,
+      "difficulty": 0,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4816,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 11,
+      "difficulty": 1,
+      "position": "middle",
+      "moves": 40,
+      "milliseconds": 4737,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 11,
+      "difficulty": 2,
+      "position": "late",
+      "moves": 90,
+      "milliseconds": 4570,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 11,
+      "difficulty": 3,
+      "position": "middle",
+      "moves": 40,
+      "milliseconds": 4167,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 11,
+      "difficulty": 4,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4528,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 13,
+      "difficulty": 0,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 3499,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 13,
+      "difficulty": 1,
+      "position": "middle",
+      "moves": 56,
+      "milliseconds": 4460,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 13,
+      "difficulty": 2,
+      "position": "late",
+      "moves": 126,
+      "milliseconds": 4490,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 13,
+      "difficulty": 3,
+      "position": "middle",
+      "moves": 56,
+      "milliseconds": 4577,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 13,
+      "difficulty": 4,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4605,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 15,
+      "difficulty": 0,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4599,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 15,
+      "difficulty": 1,
+      "position": "middle",
+      "moves": 75,
+      "milliseconds": 4502,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 15,
+      "difficulty": 2,
+      "position": "late",
+      "moves": 168,
+      "milliseconds": 4536,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 15,
+      "difficulty": 3,
+      "position": "middle",
+      "moves": 75,
+      "milliseconds": 4805,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 15,
+      "difficulty": 4,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4057,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 19,
+      "difficulty": 0,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4642,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 19,
+      "difficulty": 1,
+      "position": "middle",
+      "moves": 120,
+      "milliseconds": 4480,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 19,
+      "difficulty": 2,
+      "position": "late",
+      "moves": 270,
+      "milliseconds": 4538,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 19,
+      "difficulty": 3,
+      "position": "middle",
+      "moves": 120,
+      "milliseconds": 4627,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 19,
+      "difficulty": 4,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4598,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 7,
+      "difficulty": 0,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4450,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 7,
+      "difficulty": 1,
+      "position": "middle",
+      "moves": 16,
+      "milliseconds": 4579,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 7,
+      "difficulty": 2,
+      "position": "late",
+      "moves": 36,
+      "milliseconds": 4481,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 7,
+      "difficulty": 3,
+      "position": "middle",
+      "moves": 16,
+      "milliseconds": 4537,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 7,
+      "difficulty": 4,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4601,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 9,
+      "difficulty": 0,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4464,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 9,
+      "difficulty": 1,
+      "position": "middle",
+      "moves": 27,
+      "milliseconds": 4589,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 9,
+      "difficulty": 2,
+      "position": "late",
+      "moves": 60,
+      "milliseconds": 4805,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 9,
+      "difficulty": 3,
+      "position": "middle",
+      "moves": 27,
+      "milliseconds": 4617,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 9,
+      "difficulty": 4,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4573,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 11,
+      "difficulty": 0,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4594,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 11,
+      "difficulty": 1,
+      "position": "middle",
+      "moves": 40,
+      "milliseconds": 4556,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 11,
+      "difficulty": 2,
+      "position": "late",
+      "moves": 90,
+      "milliseconds": 4538,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 11,
+      "difficulty": 3,
+      "position": "middle",
+      "moves": 40,
+      "milliseconds": 4588,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 11,
+      "difficulty": 4,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4610,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 13,
+      "difficulty": 0,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4667,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 13,
+      "difficulty": 1,
+      "position": "middle",
+      "moves": 56,
+      "milliseconds": 4627,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 13,
+      "difficulty": 2,
+      "position": "late",
+      "moves": 126,
+      "milliseconds": 4817,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 13,
+      "difficulty": 3,
+      "position": "middle",
+      "moves": 56,
+      "milliseconds": 4668,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 13,
+      "difficulty": 4,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4632,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 15,
+      "difficulty": 0,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4530,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 15,
+      "difficulty": 1,
+      "position": "middle",
+      "moves": 75,
+      "milliseconds": 4575,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 15,
+      "difficulty": 2,
+      "position": "late",
+      "moves": 168,
+      "milliseconds": 4561,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 15,
+      "difficulty": 3,
+      "position": "middle",
+      "moves": 75,
+      "milliseconds": 4501,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 15,
+      "difficulty": 4,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4803,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 19,
+      "difficulty": 0,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4701,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 19,
+      "difficulty": 1,
+      "position": "middle",
+      "moves": 120,
+      "milliseconds": 4501,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 19,
+      "difficulty": 2,
+      "position": "late",
+      "moves": 270,
+      "milliseconds": 4670,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 19,
+      "difficulty": 3,
+      "position": "middle",
+      "moves": 120,
+      "milliseconds": 4821,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 19,
+      "difficulty": 4,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4724,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 7,
+      "difficulty": 0,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4575,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 7,
+      "difficulty": 1,
+      "position": "middle",
+      "moves": 16,
+      "milliseconds": 4635,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 7,
+      "difficulty": 2,
+      "position": "late",
+      "moves": 36,
+      "milliseconds": 4545,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 7,
+      "difficulty": 3,
+      "position": "middle",
+      "moves": 16,
+      "milliseconds": 4595,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 7,
+      "difficulty": 4,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4623,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 9,
+      "difficulty": 0,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4682,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 9,
+      "difficulty": 1,
+      "position": "middle",
+      "moves": 27,
+      "milliseconds": 4719,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 9,
+      "difficulty": 2,
+      "position": "late",
+      "moves": 60,
+      "milliseconds": 4738,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 9,
+      "difficulty": 3,
+      "position": "middle",
+      "moves": 27,
+      "milliseconds": 4561,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 9,
+      "difficulty": 4,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4810,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 11,
+      "difficulty": 0,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4752,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 11,
+      "difficulty": 1,
+      "position": "middle",
+      "moves": 40,
+      "milliseconds": 4700,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 11,
+      "difficulty": 2,
+      "position": "late",
+      "moves": 90,
+      "milliseconds": 4512,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 11,
+      "difficulty": 3,
+      "position": "middle",
+      "moves": 40,
+      "milliseconds": 4615,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 11,
+      "difficulty": 4,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4663,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 13,
+      "difficulty": 0,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4510,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 13,
+      "difficulty": 1,
+      "position": "middle",
+      "moves": 56,
+      "milliseconds": 4656,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 13,
+      "difficulty": 2,
+      "position": "late",
+      "moves": 126,
+      "milliseconds": 4512,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 13,
+      "difficulty": 3,
+      "position": "middle",
+      "moves": 56,
+      "milliseconds": 4581,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 13,
+      "difficulty": 4,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4795,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 15,
+      "difficulty": 0,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4748,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 15,
+      "difficulty": 1,
+      "position": "middle",
+      "moves": 75,
+      "milliseconds": 4637,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 15,
+      "difficulty": 2,
+      "position": "late",
+      "moves": 168,
+      "milliseconds": 4665,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 15,
+      "difficulty": 3,
+      "position": "middle",
+      "moves": 75,
+      "milliseconds": 4593,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 15,
+      "difficulty": 4,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 4225,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 19,
+      "difficulty": 0,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 3228,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 19,
+      "difficulty": 1,
+      "position": "middle",
+      "moves": 120,
+      "milliseconds": 3275,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 19,
+      "difficulty": 2,
+      "position": "late",
+      "moves": 270,
+      "milliseconds": 4577,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 19,
+      "difficulty": 3,
+      "position": "middle",
+      "moves": 120,
+      "milliseconds": 3360,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 19,
+      "difficulty": 4,
+      "position": "opening",
+      "moves": 0,
+      "milliseconds": 3611,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 19,
+      "difficulty": 1,
+      "position": "opening",
+      "action": "cpu-opening",
+      "moves": 0,
+      "milliseconds": 4548,
+      "passed": true
+    },
+    {
+      "rule": "japanese",
+      "size": 19,
+      "difficulty": 1,
+      "position": "opening",
+      "action": "player-pass",
+      "moves": 0,
+      "milliseconds": 4562,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 19,
+      "difficulty": 1,
+      "position": "opening",
+      "action": "cpu-opening",
+      "moves": 0,
+      "milliseconds": 4853,
+      "passed": true
+    },
+    {
+      "rule": "chinese",
+      "size": 19,
+      "difficulty": 1,
+      "position": "opening",
+      "action": "player-pass",
+      "moves": 0,
+      "milliseconds": 4629,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 19,
+      "difficulty": 1,
+      "position": "opening",
+      "action": "cpu-opening",
+      "moves": 0,
+      "milliseconds": 4582,
+      "passed": true
+    },
+    {
+      "rule": "jungo",
+      "size": 19,
+      "difficulty": 1,
+      "position": "opening",
+      "action": "player-pass",
+      "moves": 0,
+      "milliseconds": 4537,
+      "passed": true
+    }
+  ],
+  "passed": true,
+  "method": "legal generated positions; accepted player move to completed Draw callback; excludes startup; not OS compositor latency"
+}

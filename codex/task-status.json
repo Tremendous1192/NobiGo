@@ -1,0 +1,25 @@
+{
+  "updated": "2026-10-18",
+  "lineLimitPerTask": 10000,
+  "tasksMerged": false,
+  "implementationStatus": "Completed",
+  "validation": "validation.md",
+  "tasks": [
+    {"id":"T0","status":"Passed","result":"承認済み要件の最小修正。既存のユーザー変更を保持。"},
+    {"id":"T1","status":"Implemented","result":"Go 1.26.4、Ebitengine 2.9.9、KataGo 1.17.1。初期AVX2比較から配布版はEigen/SSE2へ変更。i7-12650H・32,472MBで96条件Passed、最大4853ms、モデル準備2083ms。最低CPU・メモリの下限はNot run。"},
+    {"id":"T2","status":"Passed","result":"取り石・自殺手・コウ・三コウ無勝負・待った・棋譜再生のテスト、fmt/vet/test/build。"},
+    {"id":"T3","status":"Passed","result":"日本・中国・純碁の採点、死石補正、セキ候補の手動上書き、無勝負のテストとfmt/vet/test/build。"},
+    {"id":"T4","status":"Passed","result":"ID別JSON、改名、削除退避、バックアップ復旧、ロック・Revision競合、パーサー境界、置換失敗テスト。fmt/vet/test/buildとgovulncheck。"},
+    {"id":"T5","status":"Passed","result":"KataGo JSON連携、応答上限、期限・キャンセル・再利用、異常応答、終了処理。fmt/vet/test/build、race、govulncheck。"},
+    {"id":"T6","status":"Passed","result":"承認済み難易度名、方策と評価による強弱、同条件10局の次局調整、ルール別棋力、純碁の二眼を保つ終盤補正。fmt/vet/test/build。"},
+    {"id":"T7","status":"Passed","result":"単一所有の対局状態、有限キュー、背景解析取消、古い応答の破棄、待った・中止、結果の一度だけの保存、エンジン再試行。fmt/vet/test/buildとrace。"},
+    {"id":"T8","status":"Implemented","result":"プレイヤー選択・登録・改名・削除確認、ルール別棋力、対局設定、モデル準備表示、復旧導線。日本語・結合文字・絵文字の編集テスト、fmt/vet/test/buildとrace、画像確認Passed。IME実入力はNot run。"},
+    {"id":"T9","status":"Passed","result":"盤面入力、推定領域、目差・勝率グラフ、情報・コメント、パス・待った・中止、CPU描画までの計測。座標境界テスト、fmt/vet/test/build、T12の実配布物96条件と画像確認Passed。"},
+    {"id":"T10","status":"Passed","result":"死石・セキの連単位修正、純碁の厳密採点表示、採点保存、計数・勝利演出、次の行動選択。修正操作テストとfmt/vet/test/build。"},
+    {"id":"T11","status":"Passed","result":"一手戻る・進む・自動再生、局面の不足解析、情報・コメント・アドバイス、結果画面への復帰。棋譜・戦績不変のテスト、fmt/vet/test/buildとrace。"},
+    {"id":"T12","status":"Passed","subtasks":[
+      {"id":"T12a","status":"Passed","result":"固定資産の取得・ハッシュ照合、既存MinGWによるCPUエンジンの静的リンク、出所・ライセンス同梱。初心者用ZIP 118671555 bytesとSHA-256を生成。"},
+      {"id":"T12b","status":"Passed","result":"ZIPを別フォルダーへ展開し、全ファイルのハッシュ、空のprofile、外部DLLなし、5画面、96条件の実CPU測定を検査。fmt/vet/test/build、race、govulncheck到達0件。未実施項目はvalidation.mdに明記。Git index.lockなし。"}
+    ]}
+  ]
+}

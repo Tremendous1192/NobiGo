@@ -1,0 +1,8 @@
+/.cache/
+/.work/
+/dist/
+/src/profile/*
+!/src/profile/.gitkeep
+/src/engine/runtime/
+*.exe
+*.test

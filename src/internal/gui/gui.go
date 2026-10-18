@@ -1,0 +1,241 @@
+// 作成日: 2026-10-18。日本語GUIの起動と描画を担当する。GUI操作はメインスレッドに限定する。
+
+// Package gui はPlayGoの日本語画面を描画する。
+package gui
+
+import (
+	"bytes"
+	"context"
+	_ "embed" // 日本語フォントを同梱してインストール済みフォントへの依存をなくす。
+	"errors"
+	"image"
+	"image/png"
+	"math/rand/v2"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/Tremendous1192/PlayGo/engine"
+	"github.com/Tremendous1192/PlayGo/internal/app"
+
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/exp/textinput"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/hajimehoshi/ebiten/v2/text/v2"
+)
+
+//go:embed assets/NotoSansJP.ttf
+var fontData []byte
+
+type window struct {
+	face           *text.GoTextFace
+	frames         int
+	screenshot     string
+	captureErr     error
+	store          *app.Store
+	profiles       []app.Profile
+	broken         []string
+	selected       int
+	settings       app.Settings
+	engine         *engine.Managed
+	controller     *app.Controller
+	ready          chan error
+	engineDone     chan struct{}
+	engineCancel   context.CancelFunc
+	engineLoading  bool
+	engineError    error
+	actions        []hit
+	menu           *choiceMenu
+	dialog         *dialog
+	field          textinput.Field
+	notice         string
+	tab            int
+	shownPhase     app.Phase
+	dead           map[int]bool
+	seki           map[int]bool
+	scorePreview   app.Score
+	scoreError     string
+	markSeki       bool
+	animationStart time.Time
+	reviewTurn     int
+	reviewBoard    *app.Board
+	autoplay       bool
+	nextReplay     time.Time
+	previewMode    bool
+	verification   *verification
+	engineBegan    time.Time
+	inputCanvas    *ebiten.Image
+	inputScroll    float64
+}
+
+type Options struct{ Root, Screenshot, Preview, Verify string }
+
+// Run はGUIが閉じるまで待機する。screenshot指定時は検証画像を保存して終了する。
+func Run(options Options) (result error) {
+	root, screenshot := options.Root, options.Screenshot
+	source, err := text.NewGoTextFaceSource(bytes.NewReader(fontData))
+	if err != nil {
+		return err
+	}
+	g := &window{face: &text.GoTextFace{Source: source, Size: 24}, screenshot: screenshot, selected: -1, settings: app.DefaultSettings(), engine: &engine.Managed{Root: root}}
+	g.face.SetVariation(text.Tag(0x77676874), 400)
+	profileDir := filepath.Join(root, "profile")
+	if options.Verify != "" {
+		if options.Preview != "" || screenshot != "" {
+			return errors.New("verification cannot be combined with preview or screenshot")
+		}
+		profileDir, err = os.MkdirTemp(filepath.Dir(options.Verify), ".verification-profile-*")
+		if err != nil {
+			return err
+		}
+		defer func() { result = errors.Join(result, os.RemoveAll(profileDir)) }()
+		g.verification = newVerification(options.Verify)
+	}
+	if options.Preview != "" {
+		if screenshot == "" {
+			return errors.New("preview requires screenshot")
+		}
+		g.previewMode = true
+		if err = g.preparePreview(options.Preview); err != nil {
+			return err
+		}
+	} else {
+		g.store, err = app.OpenStore(profileDir)
+		if err != nil {
+			g.notice = "保存フォルダーを開けません。書き込み可能な場所へZIPを展開してください。"
+		} else if err = g.reload(""); err != nil {
+			g.notice = "プレイヤー情報を読めません。保存フォルダーを確認してください。"
+		}
+		g.prepareEngine()
+	}
+	defer func() {
+		g.field.Blur()
+		if g.engineCancel != nil {
+			g.engineCancel()
+		}
+		if g.engineDone != nil {
+			<-g.engineDone
+		}
+		if g.controller != nil && !g.previewMode {
+			g.controller.Close()
+		}
+		result = errors.Join(result, g.engine.Close())
+	}()
+	ebiten.SetWindowTitle("PlayGo(v0.1.0)")
+	ebiten.SetWindowSize(1180, 800)
+	ebiten.SetWindowSizeLimits(885, 600, -1, -1)
+	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
+	err = ebiten.RunGame(g)
+	return errors.Join(err, g.captureErr)
+}
+
+// prepareEngine は初回モデル読込みを非同期に行う。結果は1件だけ保持しRun終了時に作業を待つ。
+func (g *window) prepareEngine() {
+	if g.engineLoading {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	g.engineCancel = cancel
+	g.engineLoading = true
+	g.engineError = nil
+	g.engineBegan = time.Now()
+	g.ready = make(chan error, 1)
+	g.engineDone = make(chan struct{})
+	ready, done := g.ready, g.engineDone
+	go func() { defer close(done); defer cancel(); ready <- g.engine.Prepare(ctx) }()
+}
+
+// Update は操作をUIスレッドで適用し、作業から所有権を受け取る。
+func (g *window) Update() error {
+	if g.screenshot != "" && g.frames >= 2 {
+		return ebiten.Termination
+	}
+	if g.previewMode {
+		return nil
+	}
+	if g.engineLoading {
+		select {
+		case err := <-g.ready:
+			g.engineLoading = false
+			g.engineError = err
+			if g.verification != nil {
+				g.verification.StartupMS = time.Since(g.engineBegan).Milliseconds()
+			}
+			if err == nil && g.store != nil {
+				g.controller, err = app.NewController(context.Background(), g.engine, g.store, rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())))
+				g.engineError = err
+			}
+		default:
+		}
+	}
+	if g.controller != nil {
+		g.controller.Poll()
+		if g.autoplay && g.controller.Phase == app.Review && !g.controller.Busy && time.Now().After(g.nextReplay) {
+			if g.reviewTurn >= len(g.controller.Board.Moves) {
+				g.autoplay = false
+			} else {
+				g.setReview(g.reviewTurn + 1)
+			}
+		}
+	}
+	if g.verification != nil {
+		return g.updateVerification()
+	}
+	if g.dialog != nil && g.dialog.input {
+		if g.updateNameInput() {
+			return nil
+		}
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
+		g.dismiss()
+		return nil
+	}
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		x, y := ebiten.CursorPosition()
+		for i := len(g.actions) - 1; i >= 0; i-- {
+			h := g.actions[i]
+			if image.Pt(x, y).In(h.rect) {
+				h.action()
+				break
+			}
+		}
+	}
+	return nil
+}
+
+// Draw は画面と最前面の操作領域を再構成する。
+func (g *window) Draw(screen *ebiten.Image) {
+	screen.Fill(tint(background))
+	g.actions = g.actions[:0]
+	if g.controller == nil || g.controller.Phase == app.Idle {
+		g.drawStartup(screen)
+	} else {
+		g.drawActive(screen)
+	}
+	if g.menu != nil {
+		g.drawMenu(screen)
+	}
+	if g.dialog != nil {
+		g.drawDialog(screen)
+	}
+	if g.previewMode {
+		g.label(screen, "画面確認用の合成例・架空の評価値", 830, 7, 12, warning)
+	}
+	if g.controller != nil && !g.previewMode {
+		g.controller.RecordDisplayed()
+		if g.verification != nil && g.controller.Board != nil {
+			g.verification.displayedTurn = len(g.controller.Board.Moves)
+		}
+	}
+	g.frames++
+	if g.screenshot != "" && g.frames == 2 {
+		f, err := os.Create(g.screenshot)
+		if err == nil {
+			err = errors.Join(png.Encode(f, screen), f.Close())
+		}
+		g.captureErr = err
+	}
+}
+
+// Layout は描画座標を固定してウィンドウの拡大縮小に追従する。
+func (g *window) Layout(width, height int) (int, int) { return 1180, 800 }

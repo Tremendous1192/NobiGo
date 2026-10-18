@@ -1,0 +1,86 @@
+[
+  {
+    "name": "model.bin.gz",
+    "url": "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-b18c384nbt-s9996604416-d4316597426.bin.gz",
+    "sha256": "9d7a6afed8ff5b74894727e156f04f0cd36060a24824892008fbb6e0cba51f1d",
+    "destination": "engine/runtime/model.bin.gz",
+    "kind": "file"
+  },
+  {
+    "name": "NotoSansJP.ttf",
+    "url": "https://raw.githubusercontent.com/google/fonts/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf",
+    "sha256": "c2f3b4d463500a2ddcd3849cded1fceeb9fd6d1c32e6cbecd568453ba50fc68f",
+    "destination": "internal/gui/assets/NotoSansJP.ttf",
+    "kind": "file"
+  },
+  {
+    "name": "font-OFL.txt",
+    "url": "https://raw.githubusercontent.com/google/fonts/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/notosansjp/OFL.txt",
+    "sha256": "1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9",
+    "destination": "internal/gui/assets/OFL.txt",
+    "kind": "file"
+  },
+  {
+    "name": "katago-source.zip",
+    "url": "https://codeload.github.com/lightvector/KataGo/zip/refs/tags/v1.17.1",
+    "sha256": "5d2fe983a81b10d0cc577666bb484b51a7cbb2fc436d45bb42fffb418cd6f531",
+    "destination": "licenses/KataGo",
+    "kind": "source"
+  },
+  {
+    "name": "model-license.html",
+    "url": "https://katagotraining.org/network_license/",
+    "sha256": "590837548c66daca592955910aeeea36634daa49c722b1a80f6e24c0b714657e",
+    "destination": "licenses/KataGo-model.html",
+    "kind": "file"
+  },
+  {
+    "name": "eigen-MPL2.txt",
+    "url": "https://gitlab.com/libeigen/eigen/-/raw/3.4.0/COPYING.MPL2",
+    "sha256": "fab3dd6bdab226f1c08630b1dd917e11fcb4ec5e1e020e2c16f83a0a13863e85",
+    "destination": "licenses/Eigen-MPL2.txt",
+    "kind": "file"
+  },
+  {
+    "name": "zlib-license.txt",
+    "url": "https://raw.githubusercontent.com/madler/zlib/v1.3.1/LICENSE",
+    "sha256": "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243",
+    "destination": "licenses/zlib.txt",
+    "kind": "file"
+  },
+  {
+    "name": "cmake.zip",
+    "url": "https://github.com/Kitware/CMake/releases/download/v3.31.8/cmake-3.31.8-windows-x86_64.zip",
+    "sha256": "81aa9964dbabd71fe02e7ec50472fd3ad56138c49944515ece9001efbff8d719",
+    "destination": "native",
+    "kind": "native"
+  },
+  {
+    "name": "eigen.zip",
+    "url": "https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.zip",
+    "sha256": "eba3f3d414d2f8cba2919c78ec6daab08fc71ba2ba4ae502b7e5d4d99fc02cda",
+    "destination": "native",
+    "kind": "native"
+  },
+  {
+    "name": "zlib-source.zip",
+    "url": "https://codeload.github.com/madler/zlib/zip/refs/tags/v1.3.1",
+    "sha256": "50b24b47bf19e1f35d2a21ff36d2a366638cdf958219a66f30ce0861201760e6",
+    "destination": "native",
+    "kind": "native"
+  },
+  {
+    "name": "gcc-exception.txt",
+    "url": "https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-16.1.0/COPYING.RUNTIME",
+    "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+    "destination": "licenses/GCC-Runtime-Exception.txt",
+    "kind": "file"
+  },
+  {
+    "name": "gcc-GPL3.txt",
+    "url": "https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-16.1.0/COPYING3",
+    "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+    "destination": "licenses/GCC-GPL3.txt",
+    "kind": "file"
+  }
+]
