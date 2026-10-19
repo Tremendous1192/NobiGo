@@ -1,5 +1,18 @@
 {
   "updated": "2026-10-19",
+  "downloadVersion": "v0.6.0",
+  "downloadImplementationStatus": "Completed",
+  "downloadTasks": [
+    {"id":"T0","status":"Passed","sourceChangedLines":12,"result":"初回モデル取得型へ一本化。取得後のオフライン利用、準備時間の分離、最新版ZIPのGit管理とSHAファイル除外を要件へ反映。"},
+    {"id":"T1","status":"Passed","sourceChangedLines":530,"result":"初回取得・明示修復・保存済み照合を追加。固定取得元、HTTPS/3分/256MiB、SHA-256、排他ロック、一時保存・取消回収を実装。engine test/vet Passed。実取得はT6。"},
+    {"id":"T2","status":"Passed","sourceChangedLines":273,"result":"起動段階・中止・再試行・明示修復・v0.6.0表示を追加。取得3分/読込み30秒を分離し個別計測。GUI test/vet・全体build Passed。画面確認はT6。"},
+    {"id":"T3","status":"Passed","sourceChangedLines":64,"result":"モデル非同梱ZIP、取得定義検証、100MiB未満の生成条件、最新版だけのGit除外解除を実装。package test/vet・check-ignore Passed。ZIP生成はT6。"},
+    {"id":"T4","status":"Passed","sourceChangedLines":358,"result":"ZIP/取得モデルの照合を分離。SHAファイルは存在時必須照合。検査専用prepareオプションと初回/通信制限再起動の測定を追加。verify/GUI test、vet・全体build Passed。実測はT6。"},
+    {"id":"T5","status":"Passed","sourceChangedLines":62,"result":"開発・配布説明を初回取得型へ整合。起動段階、修復、検査専用オプション、Git更新手順とハッシュの役割を記載。内容・差分確認 Passed。"},
+    {"id":"T6a","status":"Passed","sourceChangedLines":0,"localLogLines":1114,"result":"全体vet/test/build/race Passed。通常262テスト・サブテスト成功。govulncheckは到達0件（未呼出しはimport内8件・要求モジュール内26件）。ログは.work/v060-*。"},
+    {"id":"T6b","status":"Passed","sourceChangedLines":24,"generatedRecordLines":1338,"localLogLines":134,"result":"実Windows curlのCRLF応答を修正し回帰テストを追加。全体vet/test/build・engine race・govulncheck再検査 Passed。ZIP 20,950,104 bytes、初回取得・照合9,225ms、読込み2,077ms、通信制限再起動2,166ms。CPU96/96最大6,821ms、概要6/6最大41,176ms。ZIP・同梱ファイル不変と一時データ回収を確認。"},
+    {"id":"T6c","status":"Passed","sourceChangedLines":47,"result":"準備7状態・対局・最小感想戦詳細・概要の計10画面を目視。実測・試験機・未確認事項をvalidation.mdへ記録。差分・JSON・文書とGit除外を確認し、最新版ZIPだけを追跡。旧ZIP保持、保護ファイル不変、Git index.lockなし。"}
+  ],
   "renameVersion": "v0.5.0",
   "renameImplementationStatus": "Completed",
   "renameTasks": [

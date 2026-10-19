@@ -4,10 +4,13 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -62,6 +65,7 @@ func TestExtractNobiGo(t *testing.T) {
 		{"profile", []archiveEntry{{"NobiGo/profile/fixture.json", 0600}}, true},
 		{"mixed case profile", []archiveEntry{{"NobiGo/PROFILE/fixture.json", 0600}}, true},
 		{"external DLL", []archiveEntry{{"NobiGo/library.DLL", 0600}}, true},
+		{"bundled model", []archiveEntry{{"NobiGo/engine/runtime/model.bin.gz", 0600}}, true},
 		{"symlink", []archiveEntry{{"NobiGo/link", fs.ModeSymlink | 0700}}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -84,36 +88,130 @@ func TestExtractNobiGo(t *testing.T) {
 func TestVerifyContentsRequiresNobiGo(t *testing.T) {
 	for _, exe := range []string{"NobiGo.exe", "PlayGo.exe"} {
 		t.Run(exe, func(t *testing.T) {
-			root := t.TempDir()
-			if err := os.Mkdir(filepath.Join(root, "profile"), 0700); err != nil {
-				t.Fatal(err)
-			}
-			hashes := make(map[string]string)
-			for _, name := range []string{exe, "README.txt", "LICENSE.txt", "engine/analysis.cfg", "engine/build-provenance.json", "engine/runtime/katago.exe", "engine/runtime/model.bin.gz", "licenses/THIRD_PARTY.md", "licenses/Eigen-3.4.0-source.zip"} {
-				path := filepath.Join(root, filepath.FromSlash(name))
-				if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.WriteFile(path, []byte("fixture"), 0600); err != nil {
-					t.Fatal(err)
-				}
-				hash, err := fileHash(path)
-				if err != nil {
-					t.Fatal(err)
-				}
-				hashes[name] = hash
-			}
-			data, err := json.Marshal(hashes)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err = os.WriteFile(filepath.Join(root, "checksums.json"), data, 0600); err != nil {
-				t.Fatal(err)
-			}
-			err = verifyContents(root)
+			root, _ := verificationFixture(t, exe)
+			err := verifyContents(root, false)
 			if (err != nil) != (exe != "NobiGo.exe") {
 				t.Fatalf("verify error = %v for %s", err, exe)
 			}
 		})
+	}
+}
+
+// verificationFixture はモデルを含まない配布構造と固定取得定義を作る。
+func verificationFixture(t *testing.T, exe string) (string, []byte) {
+	t.Helper()
+	root, model := t.TempDir(), []byte("model fixture")
+	if err := os.Mkdir(filepath.Join(root, "profile"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	lock := fmt.Sprintf(`[{"name":"model.bin.gz","url":"https://media.katagotraining.org/uploaded/networks/models/test.bin.gz","sha256":"%x","destination":"engine/runtime/model.bin.gz","kind":"file"}]`, sha256.Sum256(model))
+	hashes := make(map[string]string)
+	for _, name := range []string{exe, "README.txt", "LICENSE.txt", "assets.lock.json", "engine/analysis.cfg", "engine/build-provenance.json", "engine/runtime/katago.exe", "licenses/KataGo-model.html", "licenses/THIRD_PARTY.md", "licenses/Eigen-3.4.0-source.zip"} {
+		path := filepath.Join(root, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			t.Fatal(err)
+		}
+		data := []byte("fixture")
+		if name == "assets.lock.json" {
+			data = []byte(lock)
+		}
+		if err := os.WriteFile(path, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+		hash, err := fileHash(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		hashes[name] = hash
+	}
+	data, err := json.Marshal(hashes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(root, "checksums.json"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	return root, model
+}
+
+// TestModelPreparationVerification は取得前後の必須条件と配布物の不変性を検証する。
+func TestModelPreparationVerification(t *testing.T) {
+	root, data := verificationFixture(t, "NobiGo.exe")
+	if err := verifyContents(root, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyContents(root, true); err == nil {
+		t.Fatal("missing downloaded model accepted")
+	}
+	model := filepath.Join(root, "engine/runtime/model.bin.gz")
+	if err := os.WriteFile(model, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyContents(root, false); err == nil {
+		t.Fatal("bundled model accepted")
+	}
+	if err := verifyContents(root, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(model, []byte("corrupt"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyContents(root, true); err == nil {
+		t.Fatal("corrupt installed model accepted")
+	}
+	if err := os.WriteFile(model, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "README.txt"), []byte("changed"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyContents(root, true); err == nil {
+		t.Fatal("modified package accepted")
+	}
+}
+
+// TestOptionalArchiveChecksum はSHAファイル欠損を許容し、存在する不一致・不正形式を拒否する。
+func TestOptionalArchiveChecksum(t *testing.T) {
+	archive := testArchive(t, []archiveEntry{{"NobiGo/README.txt", 0600}})
+	hash, err := verifyArchiveHash(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		text  string
+		valid bool
+	}{
+		{hash + "  package.zip\n", true}, {hash + "  wrong.zip", false}, {strings.Repeat("0", 64) + "  package.zip", false}, {"", false},
+	} {
+		if err = os.WriteFile(archive+".sha256", []byte(tc.text), 0600); err != nil {
+			t.Fatal(err)
+		}
+		_, err = verifyArchiveHash(archive)
+		if (err == nil) != tc.valid {
+			t.Fatalf("unexpected SHA result: %v", err)
+		}
+	}
+}
+
+// TestOfflineEnvironment は子プロセスだけの設定で既存の探索パス・接続例外を除去することを検証する。
+func TestOfflineEnvironment(t *testing.T) {
+	t.Setenv("PATH", "test-path")
+	t.Setenv("NO_PROXY", "*")
+	env := offlineEnvironment()
+	paths := 0
+	for _, value := range env {
+		key, _, _ := strings.Cut(value, "=")
+		if strings.EqualFold(key, "PATH") {
+			paths++
+		}
+		if strings.HasPrefix(value, "PATH=") && value != "PATH=" || strings.HasPrefix(value, "NO_PROXY=") && value != "NO_PROXY=" {
+			t.Fatal("offline environment retained connectivity")
+		}
+	}
+	if paths != 1 {
+		t.Fatal("duplicate PATH")
+	}
+	if os.Getenv("PATH") != "test-path" {
+		t.Fatal("parent environment changed")
 	}
 }

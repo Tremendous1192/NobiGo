@@ -2,6 +2,7 @@
 package gui
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -38,6 +39,8 @@ const ownershipLimitMilliseconds int64 = 4500
 type verification struct {
 	SummaryCases               []summaryAcceptanceCase `json:"summaryCases"`
 	StartupMS                  int64                   `json:"startupMilliseconds"`
+	ModelPreparationMS         int64                   `json:"modelPreparationMilliseconds"`
+	EngineLoadMS               int64                   `json:"engineLoadMilliseconds"`
 	Cases                      []acceptanceCase        `json:"cases"`
 	Passed                     bool                    `json:"passed"`
 	Method                     string                  `json:"method"`
@@ -341,8 +344,27 @@ func (g *window) preparePreview(mode string) error {
 	g.selected = 0
 	g.profiles = []app.Profile{c.Profile}
 	g.notice = "画面確認用の合成例です。戦績は保存しません。"
-	if mode == "startup" {
+	if mode == "startup" || strings.HasPrefix(mode, "startup-") {
 		c.Phase = app.Idle
+		switch mode {
+		case "startup":
+		case "startup-check":
+			g.engineLoading, g.preparationStage = true, preparationChecking
+		case "startup-download":
+			g.engineLoading, g.preparationStage = true, preparationDownloading
+		case "startup-verify":
+			g.engineLoading, g.preparationStage = true, preparationVerifying
+		case "startup-load":
+			g.engineLoading, g.preparationStage = true, preparationLoading
+		case "startup-error":
+			g.engineError = errors.New("download failed")
+		case "startup-repair":
+			g.engineError = engine.ErrModelInvalid
+		case "startup-cancel":
+			g.engineError = context.Canceled
+		default:
+			return errors.New("unknown startup preview")
+		}
 		return nil
 	}
 	g.notice = ""

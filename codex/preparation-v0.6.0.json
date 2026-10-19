@@ -1,0 +1,18 @@
+{
+  "initial": {
+    "modelPreparationMilliseconds": 9225,
+    "engineLoadMilliseconds": 2077,
+    "totalMilliseconds": 11309,
+    "downloaded": true,
+    "passed": true
+  },
+  "offline": {
+    "modelPreparationMilliseconds": 88,
+    "engineLoadMilliseconds": 2072,
+    "totalMilliseconds": 2166,
+    "downloaded": false,
+    "passed": true
+  },
+  "zipSHA256": "c809416caa61a516c5754061c981a3726a577ab27ce40ed8514eff11a891acca",
+  "method": "packaged GUI preparation; cached startup and CPU/review acceptance with empty PATH and unreachable proxies; not a physical network disconnection"
+}

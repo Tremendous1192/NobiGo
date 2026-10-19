@@ -2,9 +2,12 @@
 package gui
 
 import (
+	"context"
+	"errors"
 	"image"
 	"math"
 
+	"github.com/Tremendous1192/NobiGo/engine"
 	"github.com/Tremendous1192/NobiGo/internal/app"
 	"github.com/hajimehoshi/ebiten/v2"
 )
@@ -85,16 +88,32 @@ func (g *window) drawStartup(screen *ebiten.Image) {
 	status := "CPUエンジン 準備完了"
 	c := accent
 	if g.engineLoading {
-		status = "CPUエンジン 準備中…"
+		status = []string{"モデルを確認中…", "モデルを取得中…", "モデルを検証中…", "CPUエンジン 読込み中…"}[g.preparationStage]
 		c = warning
 	}
 	if g.engineError != nil {
-		status = "エンジンを起動できません"
+		status = "準備に失敗しました"
+		if errors.Is(g.engineError, context.Canceled) {
+			status = "準備を中止しました"
+		}
+		if errors.Is(g.engineError, engine.ErrModelInvalid) {
+			status = "モデルの再取得が必要です"
+		}
 		c = warning
 	}
 	g.label(screen, status, 790, 58, 20, c)
+	if g.engineLoading {
+		g.button(screen, image.Rect(900, 100, 1125, 140), "準備を中止", true, g.cancelPreparation)
+	}
 	if g.engineError != nil {
-		g.button(screen, image.Rect(900, 100, 1125, 140), "起動を再試行", true, g.prepareEngine)
+		title := "準備を再試行"
+		if errors.Is(g.engineError, engine.ErrModelInvalid) {
+			title = "モデルを再取得"
+		}
+		g.button(screen, image.Rect(900, 100, 1125, 140), title, true, func() {
+			g.modelRepair = g.modelRepair || errors.Is(g.engineError, engine.ErrModelInvalid)
+			g.prepareEngine()
+		})
 	}
 	rect(screen, image.Rect(35, 150, 1145, 725), panel)
 	g.label(screen, "プレイヤー", 56, 168, 18, muted)
@@ -152,7 +171,7 @@ func (g *window) drawStartup(screen *ebiten.Image) {
 	g.label(screen, "先攻・後攻", 56, 553, 18, muted)
 	g.combo(screen, image.Rect(252, 543, 728, 588), "先攻・後攻", []string{"先攻（黒）", "後攻（白）", "ランダム"}, g.settings.Side, true, func(i int) { g.settings.Side = i })
 	g.button(screen, image.Rect(760, 640, 1102, 698), "対局を始める →", g.selected >= 0 && g.controller != nil && !g.engineLoading && g.engineError == nil, g.begin)
-	g.label(screen, "専用GPU不要 · オフラインで対局", 56, 655, 18, accent)
+	g.label(screen, "専用GPU不要 · 初回モデル取得後はオフライン", 56, 655, 17, accent)
 	if len(g.broken) > 0 {
 		g.button(screen, image.Rect(56, 604, 650, 641), "読めないプロフィールがあります：バックアップから復旧", true, func() {
 			id := g.broken[0]
@@ -165,6 +184,9 @@ func (g *window) drawStartup(screen *ebiten.Image) {
 		})
 	}
 	message := g.notice
+	if message == "" && g.engineError != nil {
+		message = "接続と保存先を確認し、他のNobiGoを閉じて再試行してください。初回取得にはネット接続が必要です。"
+	}
 	if message == "" {
 		message = "プレイヤーを登録すると、戦績と前回の設定を保存できます。"
 	}

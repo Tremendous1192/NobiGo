@@ -39,7 +39,11 @@ type window struct {
 	settings            app.Settings
 	engine              *engine.Managed
 	controller          *app.Controller
-	ready               chan error
+	ready               chan preparationResult
+	preparationUpdates  chan preparationStage
+	preparationStage    preparationStage
+	modelRepair         bool
+	preparationReport   string
 	engineDone          chan struct{}
 	engineCancel        context.CancelFunc
 	engineLoading       bool
@@ -75,7 +79,7 @@ type window struct {
 	inputScroll         float64
 }
 
-type Options struct{ Root, Screenshot, Preview, Verify string }
+type Options struct{ Root, Screenshot, Preview, Verify, Prepare string }
 
 // Run はGUIが閉じるまで待機する。screenshot指定時は検証画像を保存して終了する。
 func Run(options Options) (result error) {
@@ -85,6 +89,10 @@ func Run(options Options) (result error) {
 		return err
 	}
 	g := &window{face: &text.GoTextFace{Source: source, Size: 24}, screenshot: screenshot, selected: -1, settings: app.DefaultSettings(), engine: &engine.Managed{Root: root}}
+	g.preparationReport = options.Prepare
+	if options.Prepare != "" && (options.Verify != "" || options.Preview != "" || screenshot != "") {
+		return errors.New("preparation check cannot be combined with other inspection modes")
+	}
 	g.face.SetVariation(text.Tag(0x77676874), 400)
 	profileDir := filepath.Join(root, "profile")
 	if options.Verify != "" {
@@ -106,6 +114,8 @@ func Run(options Options) (result error) {
 		if err = g.preparePreview(options.Preview); err != nil {
 			return err
 		}
+	} else if options.Prepare != "" {
+		g.prepareEngine()
 	} else {
 		g.store, err = app.OpenStore(profileDir)
 		if err != nil {
@@ -128,7 +138,7 @@ func Run(options Options) (result error) {
 		}
 		result = errors.Join(result, g.engine.Close())
 	}()
-	ebiten.SetWindowTitle("NobiGo(v0.5.0)")
+	ebiten.SetWindowTitle("NobiGo(v0.6.0)")
 	ebiten.SetWindowSize(1180, 800)
 	if g.previewMinimum {
 		ebiten.SetWindowSize(885, 600)
@@ -139,20 +149,9 @@ func Run(options Options) (result error) {
 	return errors.Join(err, g.captureErr)
 }
 
-// prepareEngine は初回モデル読込みを非同期に行う。結果は1件だけ保持しRun終了時に作業を待つ。
+// prepareEngine は初回取得とモデル読込みを順番に行い、成功後に対局を許可する。
 func (g *window) prepareEngine() {
-	if g.engineLoading {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	g.engineCancel = cancel
-	g.engineLoading = true
-	g.engineError = nil
-	g.engineBegan = time.Now()
-	g.ready = make(chan error, 1)
-	g.engineDone = make(chan struct{})
-	ready, done := g.ready, g.engineDone
-	go func() { defer close(done); defer cancel(); ready <- g.engine.Prepare(ctx) }()
+	g.startPreparation(engine.PrepareModel, g.engine.Prepare)
 }
 
 // Update は操作をUIスレッドで適用し、作業から所有権を受け取る。
@@ -165,17 +164,28 @@ func (g *window) Update() error {
 	}
 	if g.engineLoading {
 		select {
-		case err := <-g.ready:
+		case result := <-g.ready:
 			g.engineLoading = false
-			g.engineError = err
+			g.engineError = result.err
+			if g.preparationReport != "" {
+				return g.finishPreparationReport(result)
+			}
 			if g.verification != nil {
 				g.verification.StartupMS = time.Since(g.engineBegan).Milliseconds()
+				g.verification.ModelPreparationMS = result.modelMS
+				g.verification.EngineLoadMS = result.engineMS
 			}
-			if err == nil && g.store != nil {
+			if result.err == nil && g.store != nil {
+				var err error
 				g.controller, err = app.NewController(context.Background(), g.engine, g.store, rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())))
 				g.engineError = err
 			}
 		default:
+			select {
+			case stage := <-g.preparationUpdates:
+				g.preparationStage = stage
+			default:
+			}
 		}
 	}
 	if g.controller != nil {

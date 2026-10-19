@@ -1,6 +1,6 @@
 // 作成日: 2026-10-18。レビュー済み資産だけを初心者用ZIPへまとめる。プロフィールや開発キャッシュは含めない。
 
-// Package はsrcから実行し、distへEXE・エンジン・モデル・説明・ライセンスを出力する。
+// Package はsrcから実行し、モデルを初回取得するZIPをdistへ出力する。
 package main
 
 import (
@@ -18,6 +18,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/Tremendous1192/NobiGo/engine"
 )
 
 // main は配布物の確定後に終了する。
@@ -80,7 +82,7 @@ func run() (result error) {
 	}
 	files := map[string]string{
 		"README.txt": "README.txt", "../LICENSE": "LICENSE.txt", "assets.lock.json": "assets.lock.json",
-		"engine/runtime/katago.exe": "engine/runtime/katago.exe", "engine/runtime/model.bin.gz": "engine/runtime/model.bin.gz", "engine/analysis.cfg": "engine/analysis.cfg", "engine/build-provenance.json": "engine/build-provenance.json",
+		"engine/runtime/katago.exe": "engine/runtime/katago.exe", "engine/analysis.cfg": "engine/analysis.cfg", "engine/build-provenance.json": "engine/build-provenance.json",
 		"internal/gui/assets/OFL.txt": "licenses/NotoSansJP-OFL.txt", "licenses/KataGo-model.html": "licenses/KataGo-model.html", "licenses/Eigen-MPL2.txt": "licenses/Eigen-MPL2.txt", "licenses/zlib.txt": "licenses/zlib.txt",
 		"licenses/MinGW-runtime.txt": "licenses/MinGW-runtime.txt", "licenses/MinGW.txt": "licenses/MinGW.txt", "licenses/winpthreads.txt": "licenses/winpthreads.txt", "licenses/GCC-GPL3.txt": "licenses/GCC-GPL3.txt", "licenses/GCC-Runtime-Exception.txt": "licenses/GCC-Runtime-Exception.txt",
 		"THIRD_PARTY.md": "licenses/THIRD_PARTY.md", "../.cache/downloads/eigen.zip": "licenses/Eigen-3.4.0-source.zip",
@@ -127,9 +129,16 @@ func run() (result error) {
 	if err = os.WriteFile(filepath.Join(appDir, "checksums.json"), append(data, '\n'), 0600); err != nil {
 		return err
 	}
-	archive := filepath.Join(stage, "NobiGo-v0.5.0-windows-amd64.zip")
+	archive := filepath.Join(stage, "NobiGo-v0.6.0-windows-amd64.zip")
 	if err = makeZip(appDir, archive); err != nil {
 		return err
+	}
+	info, err := os.Stat(archive)
+	if err != nil {
+		return err
+	}
+	if info.Size() >= 100<<20 {
+		return errors.New("package exceeds regular Git distribution limit")
 	}
 	hash, err := fileHash(archive)
 	if err != nil {
@@ -142,7 +151,7 @@ func run() (result error) {
 	if err = os.WriteFile(target+".sha256", []byte(hash+"  "+filepath.Base(target)+"\n"), 0600); err != nil {
 		return err
 	}
-	info, err := os.Stat(target)
+	info, err = os.Stat(target)
 	if err != nil {
 		return err
 	}
@@ -150,8 +159,11 @@ func run() (result error) {
 	return nil
 }
 
-// verifyAssets はモデル・埋込みフォント・同梱ソースの変更を配布前に検出する。
+// verifyAssets は取得定義・埋込みフォント・同梱ソースを検証する。モデル本体は配布に不要。
 func verifyAssets(root string) error {
+	if err := engine.ValidateModelSource(root); err != nil {
+		return err
+	}
 	data, err := os.ReadFile(filepath.Join(root, "assets.lock.json"))
 	if err != nil {
 		return err
@@ -160,7 +172,7 @@ func verifyAssets(root string) error {
 	if err = json.Unmarshal(data, &assets); err != nil {
 		return err
 	}
-	required := map[string]string{"model.bin.gz": "engine/runtime/model.bin.gz", "NotoSansJP.ttf": "internal/gui/assets/NotoSansJP.ttf", "eigen.zip": "../.cache/downloads/eigen.zip"}
+	required := map[string]string{"NotoSansJP.ttf": "internal/gui/assets/NotoSansJP.ttf", "eigen.zip": "../.cache/downloads/eigen.zip"}
 	for _, asset := range assets {
 		path, ok := required[asset.Name]
 		if !ok {

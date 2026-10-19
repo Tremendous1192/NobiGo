@@ -3,6 +3,9 @@ package main
 
 import (
 	"archive/zip"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -67,5 +70,38 @@ func TestPackageArchive(t *testing.T) {
 	secondHash, err := fileHash(second)
 	if err != nil || firstHash != secondHash {
 		t.Fatal("unchanged input produced a different archive")
+	}
+}
+
+// TestPackageAssetsWithoutModel はモデル未取得でも配布でき、同梱資産の破損は拒否することを検証する。
+func TestPackageAssetsWithoutModel(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "src")
+	assets := []map[string]string{{"name": "model.bin.gz", "url": "https://media.katagotraining.org/uploaded/networks/models/test.bin.gz", "sha256": fmt.Sprintf("%x", sha256.Sum256([]byte("model"))), "destination": "engine/runtime/model.bin.gz", "kind": "file"}}
+	for name, relative := range map[string]string{"NotoSansJP.ttf": "src/internal/gui/assets/NotoSansJP.ttf", "eigen.zip": ".cache/downloads/eigen.zip"} {
+		path := filepath.Join(base, filepath.FromSlash(relative))
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(name), 0600); err != nil {
+			t.Fatal(err)
+		}
+		assets = append(assets, map[string]string{"name": name, "sha256": fmt.Sprintf("%x", sha256.Sum256([]byte(name)))})
+	}
+	data, err := json.Marshal(assets)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(root, "assets.lock.json"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = verifyAssets(root); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(root, "internal/gui/assets/NotoSansJP.ttf"), []byte("changed"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = verifyAssets(root); err == nil {
+		t.Fatal("modified packaged asset accepted")
 	}
 }

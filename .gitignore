@@ -1,6 +1,8 @@
 /.cache/
 /.work/
-/dist/
+/dist/*
+!/dist/NobiGo-v0.6.0-windows-amd64.zip
+*.sha256
 /src/profile/*
 !/src/profile/.gitkeep
 /src/engine/runtime/
