@@ -1,4 +1,4 @@
-// 作成日: 2026-10-18。感想戦は保存済み対局を変更せず再生する。助言は盤面と解析結果だけから作る。
+// 作成日: 2026-10-18。感想戦を再生し、盤面の事実から初心者向けの助言を作る。棋譜を変更せず、推定は断定しない。
 package gui
 
 import (
@@ -117,7 +117,13 @@ func reviewAdvice(c *app.Controller, turn int, before, after *app.Board) adviceT
 		return adviceText{summary: "局面を準備しています。", detail: "局面を準備しています。"}
 	}
 	if turn == 0 {
-		return adviceText{summary: "最初の局面です。隅や辺に注目しましょう。", detail: "まだ石を置いていない局面です。\n隅や辺では盤の端も囲いに使えるため、中央より少ない石で地を囲めます。\n最初の数手は、隅や辺に打った石がどうつながるかを見てみましょう。"}
+		goal := "日本ルールでは、囲った空き（地）と取った相手の石を得点に数えます。"
+		if c.Board.Rule == app.Chinese {
+			goal = "中国ルールでは、盤上の自分の石と囲った空き（地）を得点に数えます。"
+		} else if c.Board.Rule == app.Jungo {
+			goal = "純碁では、最後に盤上に残った石が多い方が勝ちで、囲った空きだけでは得点になりません。"
+		}
+		return adviceText{summary: "まだ石を置いていません。\n石の上下左右の空きに注目しましょう。", detail: "まだ石を置いていない局面です。\n" + goal + "\n石の上下左右に接する空いた交点を「呼吸点」と呼び、これがなくなると石は取られます。\n最初の数手では、置いた石に接する空きを一つずつ数えてみましょう。"}
 	}
 	if before == nil || after == nil {
 		return adviceText{summary: "局面を準備しています。", detail: "局面を準備しています。"}
@@ -135,8 +141,8 @@ func reviewAdvice(c *app.Controller, turn int, before, after *app.Board) adviceT
 	vertex := adviceVertex(move.Point, after.Size)
 	changes := describeMoveChanges(facts, after.Size, actor, other)
 	detail := []string{
-		fmt.Sprintf("%sは%sに打ち、%s。", actor, vertex, changes),
-		fmt.Sprintf("着手した%sの連（上下左右につながった石）は%d個で、呼吸点（連に隣接する空点）は%dか所です。", vertex, facts.stones, len(facts.liberties)),
+		changes,
+		fmt.Sprintf("%sからつながる石は%d個で、上下左右の空き（呼吸点）は%dか所です。", vertex, facts.stones, len(facts.liberties)),
 	}
 	meaning, caution, action := explainMove(facts, after, playerMove)
 	detail = append(detail, meaning, caution, action)
@@ -147,42 +153,40 @@ func reviewAdvice(c *app.Controller, turn int, before, after *app.Board) adviceT
 			if a.Partial || c.Evaluations[turn].Partial {
 				qualifier = "（途中解析）"
 			}
-			detail = append(detail, "比較候補："+adviceVertex(a.Moves[0].Point, before.Size)+qualifier+"も着手前の盤面で見直し、取れる石や、打った後の呼吸点を比べてみましょう。")
+			detail = append(detail, "比較候補："+adviceVertex(a.Moves[0].Point, before.Size)+qualifier+"もAIが挙げていますが、その先の結果は未確定なので、打つ前の図で自分の石を守れるか比べてみましょう。")
 		}
 	}
 	summary := summarizeMove(facts, vertex, actor, playerMove, after.Size)
-	return adviceText{summary: summary, detail: title + "\n" + strings.Join(detail, "\n"), focus: moveFocusTargets(before, after, move, facts)}
+	return adviceText{summary: summary, detail: title + "：" + vertex + "\n" + strings.Join(detail, "\n"), focus: moveFocusTargets(before, after, move, facts)}
 }
 
-// summarizeMove は危険・主な効果・確認事項を短い3行へ分け、詳細の省略で危険が隠れないようにする。
+// summarizeMove は危険・主な効果・確認事項を3行にする。同時に起きた他の効果は詳細に残す。
 func summarizeMove(facts moveFacts, vertex, actor string, playerMove bool, size int) string {
-	first := fmt.Sprintf("%sの手：%s、呼吸点%d。", actor, vertex, len(facts.liberties))
-	if len(facts.liberties) == 1 {
-		first = actor + "の手：アタリ。呼吸点は" + adviceVertex(facts.liberties[0], size) + "だけ。"
-	}
-	var effects []string
-	if facts.taken > 0 {
-		effects = append(effects, fmt.Sprintf("取り%d個", facts.taken))
-	}
-	if len(facts.attacked) > 0 {
-		effects = append(effects, "相手アタリ")
-	}
-	if len(facts.rescued) > 0 {
-		effects = append(effects, "救出")
-	}
-	if facts.connected >= 2 {
-		effects = append(effects, "連結")
-	}
-	second := strings.Join(effects, "・")
-	if second == "" {
-		second = "周囲の石とのつながりに注目。"
-		if facts.connected == 1 {
-			second = "自分の石から伸びました。"
-		}
-	}
-	third := "次局は打った後の呼吸点も確認。"
+	first := actor + "の手：" + vertex + "に置きました。"
+	other := "相手"
 	if !playerMove {
-		third = "自分の連とCPUの呼吸点を確認。"
+		other = "あなた"
+	}
+	second := "周りの石とのつながりに注目しましょう。"
+	switch {
+	case facts.taken > 0:
+		second = fmt.Sprintf("%sの石を%d個取りました。", other, facts.taken)
+	case len(facts.rescued) > 0:
+		second = "取られそうな石の空きを増やしました。"
+	case len(facts.attacked) > 0:
+		second = other + "の石をアタリにしました。"
+	case facts.connected >= 2:
+		second = "離れていた石をつなぎました。"
+	case facts.connected == 1:
+		second = "近くの石とつながりました。"
+	}
+	third := "次局は、打った後の空きも数えましょう。"
+	if !playerMove {
+		third = "近くの自分の石に空きがあるか確認。"
+	}
+	if len(facts.liberties) == 1 {
+		first = actor + "の" + vertex + "：打った石もアタリです。"
+		third = "残る空きは" + adviceVertex(facts.liberties[0], size) + "。すぐ取れるかは詳細へ。"
 	}
 	return strings.Join([]string{first, second, third}, "\n")
 }
@@ -199,82 +203,80 @@ func adviceVertex(point, size int) string {
 	return vertex
 }
 
-// describeMoveChanges は同時に変化した連を座標と実数で説明する。
+// describeMoveChanges は同時に起きた効果を短文で分け、各対象の座標と実数を残す。
 func describeMoveChanges(facts moveFacts, size int, actor, other string) string {
 	var changes []string
 	if facts.taken > 0 {
-		changes = append(changes, fmt.Sprintf("%sの石を%d個取り", other, facts.taken))
+		changes = append(changes, fmt.Sprintf("%sの石を%d個取りました。", other, facts.taken))
 	}
 	if facts.connected >= 2 {
-		changes = append(changes, fmt.Sprintf("%sの%dつの連をつなぎ", actor, facts.connected))
+		changes = append(changes, fmt.Sprintf("離れていた%sの%d組の石をつなぎました。", actor, facts.connected))
 	} else if facts.connected == 1 {
-		changes = append(changes, actor+"の石から伸び")
+		changes = append(changes, "近くにある"+actor+"の石とつながりました。")
 	}
 	for _, group := range facts.rescued {
-		changes = append(changes, fmt.Sprintf("%sにあった%sの%d個の石の呼吸点を1か所から%dか所に増やし", adviceVertex(group.point, size), actor, group.stones, group.newLiberties))
+		changes = append(changes, fmt.Sprintf("%sの%sの石%d個は、周りの空きが1か所から%dか所に増えました。", adviceVertex(group.point, size), actor, group.stones, group.newLiberties))
 	}
 	for _, group := range facts.attacked {
-		changes = append(changes, fmt.Sprintf("%sの%sの%d個の石の呼吸点を%dか所から1か所に減らし", adviceVertex(group.point, size), other, group.stones, group.oldLiberties))
+		changes = append(changes, fmt.Sprintf("%sの%sの石%d個は、周りの空きが%dか所から1か所に減り、アタリになりました。", adviceVertex(group.point, size), other, group.stones, group.oldLiberties))
 	}
 	if len(changes) == 0 {
-		return "新しい場所に石を置きました"
+		return "近くの味方とはまだつながっていません。"
 	}
-	return strings.Join(changes, "、") + "ました"
+	// 複数の対象がある局面では、文数を減らすために危険や別の石の変化を省かない。
+	return strings.Join(changes, "\n")
 }
 
 // explainMove は盤面の意味と次の確認を分け、アタリや推定意図を勝敗の断定へ変換しない。
 func explainMove(facts moveFacts, after *app.Board, playerMove bool) (meaning, caution, action string) {
-	var aims []string
-	if facts.taken > 0 {
-		aims = append(aims, "相手の石を取ること")
+	meaning = "近くの味方と上下左右につながれば、その石も含めて空きを数えます。"
+	aim := "周りに石を増やす足場を作ること"
+	action = "次局では、打つ前に近くの味方と相手の石の空きを一つずつ数えてみましょう。"
+	switch {
+	case facts.taken > 0:
+		meaning = "石を取って空いた場所を使い、自分の石の空きを増やせるかも確認したい場面です。"
+		aim = "あなたの石を取り、周りに空きを作ること"
+		action = "次局では、取る前に、置いた後の自分の石に空きが残るかを確かめましょう。"
+	case len(facts.rescued) > 0:
+		meaning = "空きが増えた石は、残り1か所をふさがれると取られる状態から抜け出しました。"
+		aim = "取られそうな自分の石の空きを増やすこと"
+		action = "次局では、取られそうな石から先に空きを数え、増やせる交点を探してみましょう。"
+	case len(facts.attacked) > 0:
+		meaning = "残る空きをふさげれば相手の石を取れますが、相手にも次の手があります。"
+		aim = "あなたの石の空きを減らし、守りを迫ること"
+		action = "次局では、アタリにした後に相手が空きを増やせる交点も探してみましょう。"
+	case facts.connected >= 1:
+		meaning = "上下左右につながった石はひとまとまりなので、全体に接する空きを数えるのが大切です。"
+		aim = "自分の石をつなぎ、まとまりを作ること"
+		action = "次局では、つなぐ前に、つながった後の石全体の空きを数えてみましょう。"
 	}
-	if len(facts.rescued) > 0 {
-		aims = append(aims, "アタリだった石の呼吸点を増やすこと")
+	caution = "周りに相手の石が増えると空きが減るため、今の数だけで安全とは決められません。"
+	if !playerMove {
+		meaning = "CPUの狙いは、" + aim + "だったと考えられます。"
+		action = "近くの自分の石を見て、CPUに空きをふさがれそうか確認しましょう。"
 	}
 	if len(facts.attacked) > 0 {
-		aims = append(aims, "相手の石の逃げ道を減らすこと")
-	}
-	if facts.connected >= 2 {
-		aims = append(aims, "離れた石をつなぐこと")
-	}
-	if len(aims) == 0 {
-		if facts.connected == 1 {
-			aims = append(aims, "石をつなげながら周囲へ伸びること")
-		} else {
-			aims = append(aims, "今後の石の足場を作ること")
-		}
-	}
-	meaning = "この手の注目点は、" + strings.Join(aims, "と") + "です。"
-	if !playerMove {
-		meaning = "盤面の変化からは、" + strings.Join(aims, "と") + "がCPUの狙いと考えられます（推定）。"
-	}
-	caution = "呼吸点の数だけでは石の安全は決まらないので、周囲の相手の石も確認しましょう。"
-	action = "次局では、打つ前に自分の連と相手の連の呼吸点をそれぞれ数えてみましょう。"
-	if !playerMove {
-		action = "あなたは、CPUの石に近い自分の連の呼吸点を数え、守る必要があるか確認しましょう。"
-	}
-	if len(facts.attacked) > 0 {
-		caution = "相手の連はアタリ（呼吸点が残り1つ）ですが、逃げたり石を取ったりして助かる場合もあります。"
+		caution = "アタリは空きが残り1か所の状態ですが、石をつなぐ・相手の石を取るなどで空きを増やせる場合があります。"
 		if !playerMove {
-			action = "あなたは、アタリになった連を伸びて助ける手と、周囲のCPUの石を取る手を確認しましょう。"
+			action = "アタリになった自分の石を見て、空きを増やす手と近くのCPUの石を取る手を比べましょう。"
 		}
 	}
 	if len(facts.rescued) > 0 && len(facts.attacked) == 0 {
-		caution = "アタリ（呼吸点が残り1つ）は解消しましたが、この先も取られないと確定したわけではありません。"
+		caution = "ひとまずアタリは解消しましたが、この先も取られないと決まったわけではありません。"
 	}
 	if len(facts.liberties) == 1 {
 		last := adviceVertex(facts.liberties[0], after.Size)
-		caution = "ただし、着手した連もアタリ（呼吸点が残り1つ）で、最後の呼吸点は" + last + "です。"
+		caution = "ただし、打った石も空きが1か所だけの「アタリ」で、残る空きは" + last + "です。"
 		if len(facts.attacked) > 0 {
-			caution = "相手の連をアタリにしましたが、着手した連もアタリ（呼吸点が残り1つ）で、最後の呼吸点は" + last + "です。"
+			caution = "相手だけでなく打った石もアタリ（空きが残り1か所）で、打った石に残る空きは" + last + "です。"
 		}
 		if playerMove {
-			action = "次局では、取れる石だけでなく、打った後に自分の連へ逃げ道が残るかも確認しましょう。"
+			action = "次局では、取れる石だけでなく、打った自分の石が取られないかも確認しましょう。"
 		} else {
-			action = "あなたは、最後の呼吸点へ打てるかと、打った後の自分の石の安全を確認しましょう。"
+			action = last + "に打てるかと、打った後の自分の石に空きが残るかを確認しましょう。"
 		}
 		if !after.Legal(facts.liberties[0]) {
-			action = "現在の規則ではその呼吸点へすぐに打てないため、次局でもアタリと実際に取れるかを区別して確認しましょう。"
+			action = last + "は今の規則ではすぐに打てないため、アタリでも直ちに取り返せないことを図で確かめましょう。"
 		}
 	}
 	return meaning, caution, action
@@ -287,19 +289,22 @@ func passAdvice(after *app.Board, playerMove bool) adviceText {
 		actor = "CPU"
 	}
 	summary := actor + "はパスしました。"
-	ending := "双方が続けてパスすると終局するため、今は打ち残しを確かめる場面です。"
+	ending := "まだ連続パスではないので、次の人は石を置くこともできます。"
 	if after.Passes >= 2 {
 		ending = "双方が続けてパスしたので、この対局は終局して採点へ進みました。"
 	}
-	rule := "このルールでは地も得点になるため、囲った空点と守る必要のある石を見直しましょう。"
+	rule := "日本ルールは囲った空き（地）と取り石で数えるため、囲いの切れ目や取られそうな石を見直しましょう。"
+	if after.Rule == app.Chinese {
+		rule = "中国ルールは盤上の石と囲った空き（地）で数えるため、囲いの切れ目や取られそうな石を見直しましょう。"
+	}
 	if after.Rule == app.Jungo {
-		rule = "純碁は盤上の石数で得点が決まるため、実際に取れる石と安全に増やせる石を見直しましょう。"
+		rule = "純碁は盤上の石数で決まり、終局時に死に石を取り除かないため、取れる石はパスの前に実際に取る必要があります。"
 	}
-	action := "次局では、パスの前に自分の弱い連と相手の取り残した石を一度確認してみましょう。"
+	action := "次局では、パスの前に自分の石が取られそうな場所と、まだ取れる相手の石を確認してみましょう。"
 	if !playerMove {
-		action = "CPUは終局を目指した可能性がありますが、意図は断定せず、あなた自身の打ち残しも確認しましょう。"
+		action = "CPUは打つ必要がないと考えた可能性がありますが、あなたも取れる石や守る場所が残っていないか確認しましょう。"
 	}
-	return adviceText{summary: summary, detail: strings.Join([]string{summary + "盤上の石の配置は変わりません。", ending, rule, action}, "\n")}
+	return adviceText{summary: summary, detail: strings.Join([]string{summary + "盤上の石はそのままです。", ending, rule, action}, "\n")}
 }
 
 type changedGroup struct {

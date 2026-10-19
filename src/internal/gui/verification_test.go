@@ -8,6 +8,8 @@ import (
 
 	"github.com/Tremendous1192/NobiGo/engine"
 	"github.com/Tremendous1192/NobiGo/internal/app"
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/text/v2"
 )
 
 // TestHeaderPreviewScenarios はルール別棋力・全路数・黒白・長い名前・最小画面を保存や実解析なしで検証する。
@@ -130,7 +132,7 @@ func TestDisplayPreviewBoundaries(t *testing.T) {
 					t.Fatal("missing diagram")
 				}
 				d := g.advice.diagram
-				if mode == "review-detail-before" && (!d.showBefore || d.targets[d.target].label != "取られた連") {
+				if mode == "review-detail-before" && (!d.showBefore || d.targets[d.target].label != "取られた石") {
 					t.Fatal("wrong before target")
 				}
 				if mode == "review-detail-outside" {
@@ -188,6 +190,49 @@ func TestAIPreviewEvidence(t *testing.T) {
 		if !found {
 			t.Fatalf("%s has no expected connection", mode)
 		}
+	}
+}
+
+// TestAdviceClarityPreviews は平易な説明と図が同じ局面を使い、要約3行と詳細の全文が描画幅に収まることを検証する。
+func TestAdviceClarityPreviews(t *testing.T) {
+	for _, tc := range []struct {
+		mode, want string
+		rule       app.Rule
+		turn       int
+	}{
+		{"review-detail-rescue", "1か所から3か所", app.Japanese, 5},
+		{"review-detail-atari", "1か所に減り、アタリ", app.Japanese, 3},
+		{"review-detail-jungo-empty", "空きだけでは得点になりません", app.Jungo, 0},
+		{"review-detail-jungo-pass", "実際に取る必要", app.Jungo, 2},
+	} {
+		t.Run(tc.mode, func(t *testing.T) {
+			g := summaryWindow(t, app.Japanese, app.Black)
+			g.previewMode = true
+			if err := g.preparePreview(tc.mode); err != nil {
+				t.Fatal(err)
+			}
+			g.syncPhase()
+			if g.advice == nil || g.store != nil || g.engine != nil || g.autoplay || g.reviewTurn != tc.turn || g.reviewBoard.Rule != tc.rule {
+				t.Fatal("clarity preview has wrong position or accessed real resources")
+			}
+			if !strings.Contains(g.advice.body, tc.want) {
+				t.Fatalf("missing lesson: %s", g.advice.body)
+			}
+			a := reviewAdvice(g.controller, tc.turn, g.reviewBefore, g.reviewBoard)
+			if g.advice.body != a.detail || len(g.wrapLines(a.summary, 445, 16)) > 3 {
+				t.Fatal("preview differs from actual advice or summary exceeds three lines")
+			}
+			g.drawAdviceDialog(ebiten.NewImage(1180, 800))
+			if strings.Join(g.advice.lines, "") != strings.ReplaceAll(a.detail, "\n", "") {
+				t.Fatal("detail lost text during wrapping")
+			}
+			g.face.Size = adviceFontSize
+			for _, line := range g.advice.lines {
+				if width, _ := text.Measure(line, g.face, adviceLineHeight); width > adviceWidth-16 {
+					t.Fatal("detail exceeded viewport")
+				}
+			}
+		})
 	}
 }
 

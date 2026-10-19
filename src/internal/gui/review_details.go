@@ -80,7 +80,7 @@ func (g *window) drawAdviceDialog(screen *ebiten.Image) {
 	g.overlay(screen)
 	rect(screen, image.Rect(40, 50, 1140, 755), panel)
 	g.label(screen, fmt.Sprintf("%d手目のアドバイス", d.turn), 65, 68, 28, foreground)
-	g.label(screen, "自動再生は停止中。部分図だけに石のつながりとAI推定を表示。全体盤の枠が拡大範囲です。", 65, 115, 17, muted)
+	g.label(screen, "再生は停止中です。右の図で説明した石を探し、着手前と着手後を比べてみましょう。", 65, 115, 17, muted)
 	if d.lines == nil {
 		d.lines = g.wrapLines(d.body, adviceWidth-16, adviceFontSize)
 		d.maxScroll = math.Max(0, float64(len(d.lines)*adviceLineHeight+16-adviceHeight))

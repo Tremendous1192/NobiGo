@@ -16,8 +16,8 @@ func TestFocusMatchesCombinedAdvice(t *testing.T) {
 		points []int
 		labels []string
 	}{
-		{[]int{2, 1, 8, 7, 0}, []string{"着手した連", "取られた連", "アタリにした連"}},
-		{[]int{0, 1, 14, 48, 7}, []string{"着手した連", "助けた連", "つないだ連"}},
+		{[]int{2, 1, 8, 7, 0}, []string{"打った石のまとまり", "取られた石", "アタリになった石"}},
+		{[]int{0, 1, 14, 48, 7}, []string{"打った石のまとまり", "空きが増えた石", "つないだ石"}},
 	} {
 		c, before, after := adviceFixture(t, app.Japanese, tc.points)
 		advice := reviewAdvice(c, len(tc.points), before, after)
@@ -36,7 +36,7 @@ func TestFocusMatchesCombinedAdvice(t *testing.T) {
 			pre, preOK := d.selectedGroup()
 			d.showBefore = false
 			_, postOK := d.selectedGroup()
-			if target.label == "取られた連" && (!preOK || len(pre.stones) != 1 || postOK) {
+			if target.label == "取られた石" && (!preOK || len(pre.stones) != 1 || postOK) {
 				t.Fatal("captured target lost before/after meaning")
 			}
 		}

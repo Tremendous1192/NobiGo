@@ -192,7 +192,7 @@ func TestDiagramControlsKeepTextAndGameFixed(t *testing.T) {
 		t.Fatalf("no control at %d,%d", x, y)
 	}
 	click(850, 200)
-	if g.advice.diagram.targets[g.advice.diagram.target].label != "取られた連" {
+	if g.advice.diagram.targets[g.advice.diagram.target].label != "取られた石" {
 		t.Fatal("wrong next target")
 	}
 	if _, ok := g.advice.diagram.selectedGroup(); ok {

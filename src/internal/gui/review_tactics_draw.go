@@ -114,7 +114,7 @@ func (g *window) drawTactics(screen *ebiten.Image, p *diagramPosition, view imag
 
 // drawTacticsLegend は連結済みの石とAI推定を区別し、色だけに意味を依存させない。
 func (g *window) drawTacticsLegend(screen *ebiten.Image, p *diagramPosition, x, y float64) {
-	g.label(screen, "輪＝AI生存見込み：緑 安定／赤 注意／灰 未確定", x, y, 13, foreground)
-	g.label(screen, "線＝連絡：青 連結済／緑 強め／赤 破線 注意／灰 点線 未確定", x, y+19, 12, foreground)
+	g.label(screen, "輪は石の安全の予測：緑 安定／赤 注意／灰 未確定", x, y, 13, foreground)
+	g.label(screen, "線：青 つながった石／緑 強め／赤破線 注意／灰点線 未確定", x, y+19, 12, foreground)
 	g.label(screen, g.tacticsStatus(p), x, y+38, 13, muted)
 }

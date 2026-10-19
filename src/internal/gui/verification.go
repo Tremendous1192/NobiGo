@@ -537,6 +537,7 @@ func (g *window) prepareAIPreview(mode string) error {
 func (g *window) prepareAdvicePreview(mode string) error {
 	switch mode {
 	case "review-detail", "review-detail-cpu", "review-detail-combined", "review-detail-wait", "review-detail-error", "review-detail-long", "review-detail-bottom", "review-detail-min",
+		"review-detail-rescue", "review-detail-atari", "review-detail-jungo-empty", "review-detail-jungo-pass",
 		"review-detail-before", "review-detail-outside", "review-detail-pass", "review-detail-empty",
 		"review-detail-7", "review-detail-9", "review-detail-11", "review-detail-13", "review-detail-15", "review-detail-19":
 	default:
@@ -550,26 +551,41 @@ func (g *window) prepareAdvicePreview(mode string) error {
 		return err
 	}
 	c := g.controller
-	if mode == "review-detail-combined" || mode == "review-detail-before" {
-		b, err := app.NewBoard(7, app.Japanese)
+	if mode == "review-detail-combined" || mode == "review-detail-before" || mode == "review-detail-rescue" || mode == "review-detail-atari" || mode == "review-detail-jungo-empty" || mode == "review-detail-jungo-pass" {
+		points, turn, rule := []int{2, 1, 8, 7, 0, -1, -1}, 5, app.Japanese
+		switch mode {
+		case "review-detail-rescue":
+			points = []int{0, 1, 14, 48, 7, -1, -1}
+		case "review-detail-atari":
+			points, turn = []int{20, 0, 1, -1, -1}, 3
+		case "review-detail-jungo-empty":
+			points, turn, rule = []int{0, -1, -1}, 0, app.Jungo
+		case "review-detail-jungo-pass":
+			points, turn, rule = []int{0, -1, -1}, 2, app.Jungo
+			c.Player = app.White
+		}
+		b, err := app.NewBoard(7, rule)
 		if err != nil {
 			return err
 		}
-		for _, point := range []int{2, 1, 8, 7, 0, -1, -1} {
+		for _, point := range points {
 			if err := b.Play(point); err != nil {
 				return err
 			}
 		}
 		c.Board = b
 		c.Evaluations = make([]*engine.Analysis, len(b.Moves)+1)
-		g.reviewTurn = 5
-		g.reviewBoard, err = c.Snapshot(5)
+		g.reviewTurn = turn
+		g.reviewBoard, err = c.Snapshot(turn)
 		if err != nil {
 			return err
 		}
-		g.reviewBefore, err = c.Snapshot(4)
-		if err != nil {
-			return err
+		g.reviewBefore = nil
+		if turn > 0 {
+			g.reviewBefore, err = c.Snapshot(turn - 1)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	if size := map[string]int{"review-detail-7": 7, "review-detail-9": 9, "review-detail-11": 11, "review-detail-13": 13, "review-detail-15": 15, "review-detail-19": 19}[mode]; size > 0 {

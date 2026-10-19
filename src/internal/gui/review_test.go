@@ -30,7 +30,7 @@ func TestSummaryPreservesDangerWithinThreeLines(t *testing.T) {
 		if len(lines) != 3 || g.wrap(summary, 445, 16, 3) != summary {
 			t.Fatalf("summary was truncated: %q", summary)
 		}
-		for _, want := range []string{"アタリ", "取り361個", "相手アタリ", "救出", "連結", "確認"} {
+		for _, want := range []string{actor, "T19", "アタリ", "石を361個取りました", "残る空き", "詳細"} {
 			if !strings.Contains(summary, want) {
 				t.Fatalf("summary lost %q", want)
 			}
@@ -389,7 +389,7 @@ func TestDetailedAdviceUsesFactsAndCautions(t *testing.T) {
 		for _, player := range []app.Color{app.Black, app.White} {
 			c.Player = player
 			advice := reviewAdvice(c, 5, before, after)
-			for _, want := range []string{"A7", "石を1個", "呼吸点（", "1か所", "アタリ", "B7", "すぐに打てない"} {
+			for _, want := range []string{"A7", "石を1個", "空き（呼吸点）", "1か所", "アタリ", "B7", "すぐに打てない"} {
 				if !strings.Contains(advice.detail, want) {
 					t.Fatalf("missing %q in %s", want, advice.detail)
 				}
@@ -407,10 +407,87 @@ func TestDetailedAdviceUsesFactsAndCautions(t *testing.T) {
 	}
 	c, before, after := adviceFixture(t, app.Japanese, []int{0, 1, 14, 48, 7})
 	advice := reviewAdvice(c, 5, before, after)
-	for _, want := range []string{"A6", "2つの連", "A7", "1か所から3か所", "次局では"} {
+	for _, want := range []string{"A6", "2組の石", "A7", "1か所から3か所", "次局では"} {
 		if !strings.Contains(advice.detail, want) {
 			t.Fatalf("missing combined effect %q: %s", want, advice.detail)
 		}
+	}
+}
+
+// TestAdviceExplainsEachEffectInPlainSentences は複合効果を省かず、短文の意味と次の確認を両手番で検証する。
+func TestAdviceExplainsEachEffectInPlainSentences(t *testing.T) {
+	for _, tc := range []struct {
+		name, fact, lesson string
+		points             []int
+	}{
+		{"capture", "石を1個取りました", "取る前に", []int{0, 1, -1, 7}},
+		{"rescue", "1か所から2か所", "増やせる交点", []int{0, 1, 7}},
+		{"connect-and-rescue", "2組の石をつなぎました", "1か所から3か所", []int{0, 1, 14, 48, 7}},
+		{"atari", "1か所に減り、アタリ", "相手が空きを増やせる交点", []int{20, 0, 1}},
+		{"capture-and-ko", "石を1個取りました", "すぐに打てない", []int{2, 1, 8, 7, 0}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, before, after := adviceFixture(t, app.Japanese, tc.points)
+			own := reviewAdvice(c, len(tc.points), before, after)
+			for _, want := range []string{tc.fact, tc.lesson, "空き（呼吸点）"} {
+				if !strings.Contains(own.detail, want) {
+					t.Fatalf("missing explanation %q: %s", want, own.detail)
+				}
+			}
+			if strings.Contains(own.detail, "この手の注目点は") || strings.Contains(own.summary, "救出・連結") {
+				t.Fatal("terse effect list or repeated generic meaning survived")
+			}
+			if n := strings.Count(own.detail, "。"); n < 4 || n > 6 {
+				t.Fatalf("ordinary explanation has %d sentences", n)
+			}
+			c.Player = c.Player.Other()
+			cpu := reviewAdvice(c, len(tc.points), before, after)
+			if !strings.Contains(cpu.detail, tc.fact) || !strings.Contains(cpu.detail, "だったと考えられます") || strings.Contains(cpu.detail, "次局では") {
+				t.Fatalf("CPU explanation lost facts or player response: %s", cpu.detail)
+			}
+		})
+	}
+}
+
+// TestAdviceKeepsAllTargetsInDensePosition は複数の対象や効果があっても詳細で座標・個数・変化を失わないことを検証する。
+func TestAdviceKeepsAllTargetsInDensePosition(t *testing.T) {
+	facts := moveFacts{taken: 2, connected: 2,
+		rescued:  []changedGroup{{point: 0, stones: 2, oldLiberties: 1, newLiberties: 3}, {point: 2, stones: 1, oldLiberties: 1, newLiberties: 2}},
+		attacked: []changedGroup{{point: 14, stones: 3, oldLiberties: 2, newLiberties: 1}}}
+	got := describeMoveChanges(facts, 7, "あなた", "CPU")
+	for _, want := range []string{"石を2個取りました。", "2組の石をつなぎました。", "A7のあなたの石2個", "C7のあなたの石1個", "A5のCPUの石3個", "1か所から3か所", "1か所から2か所", "2か所から1か所"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("lost target or effect %q: %s", want, got)
+		}
+	}
+	if strings.Count(got, "。\n") != 4 {
+		t.Fatal("combined effects were joined into one long sentence")
+	}
+}
+
+// TestAdviceOpeningAndPassExplainScoring は初期局面・1回目のパス・連続パスで3ルールの数え方を混同しないことを検証する。
+func TestAdviceOpeningAndPassExplainScoring(t *testing.T) {
+	for _, tc := range []struct {
+		rule app.Rule
+		name string
+	}{
+		{app.Japanese, "日本ルール"}, {app.Chinese, "中国ルール"}, {app.Jungo, "純碁"},
+	} {
+		t.Run(string(tc.rule), func(t *testing.T) {
+			c, before, after := adviceFixture(t, tc.rule, []int{0, -1})
+			opening := reviewAdvice(c, 0, nil, nil).detail
+			pass := reviewAdvice(c, 2, before, after).detail
+			if !strings.Contains(opening, tc.name) || !strings.Contains(pass, tc.name) || !strings.Contains(pass, "まだ連続パスではない") {
+				t.Fatal("scoring rule or first pass was not explained")
+			}
+			if tc.rule == app.Jungo && (!strings.Contains(opening, "空きだけでは得点になりません") || !strings.Contains(pass, "実際に取る必要")) {
+				t.Fatal("stone scoring was confused with territory")
+			}
+			c, before, after = adviceFixture(t, tc.rule, []int{0, -1, -1})
+			if got := reviewAdvice(c, 3, before, after).detail; !strings.Contains(got, "終局して採点") || strings.Contains(got, "まだ連続パスではない") {
+				t.Fatal("terminal pass used ongoing-game wording")
+			}
+		})
 	}
 }
 

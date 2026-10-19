@@ -1,5 +1,18 @@
 {
   "updated": "2026-10-19",
+  "adviceClarityVersion": "v0.7.0",
+  "adviceClarityImplementationStatus": "Completed",
+  "adviceClarityTasks": [
+    {"id":"A1","status":"Passed","changedLinesUpperBound":500,"result":"参考2サイトの本文を確認。独自表現の方針・6場面・受入条件をREADMEへ記録。公開HTML289行を含む。要件書の既存編集は保持。"},
+    {"id":"A2","status":"Passed","changedLinesUpperBound":2000,"result":"要約・詳細・初期局面・パスを平易な文章へ変更。複合効果・黒白・3ルール・解析欠損・コウ・比較候補を検証。GUI test/vet Passed。追加試験の呼吸点期待値を実盤面の2か所へ修正。上限は整形・試験ログを含む保守値。"},
+    {"id":"A3","status":"Passed","changedLinesUpperBound":1000,"result":"図の対象・石数・凡例を本文と同じ言葉へ変更。概要4ページ目が同じ手の要約を使い、比較図は着手前であることを黒白・3ルールで検証。GUI test/vet Passed。既存のスクロール・本文固定・再生停止の試験も成功。"},
+    {"id":"A4","status":"Passed","changedLinesUpperBound":1500,"result":"救出・アタリ・純碁初期・純碁パスの4プレビューを追加。GUI/verify test・vet・preview build Passed。15画面を目視し、主語の接続を修正後に全例を再生成、代表4例を再確認。実入力・別DPIはNot run。"},
+    {"id":"A5","status":"Passed","subtasks":[
+      {"id":"A5a","status":"Passed","changedLinesUpperBound":2000,"result":"説明書・79画面・履歴を残す検証出力名を整合。fmt/vet/test/build Passed、通常294テスト成功。build初回はWSL接続失敗でログ未生成、接続復旧後に実行成功。JSONLログ1224行を含む。"},
+      {"id":"A5b","status":"Passed","changedLinesUpperBound":3500,"result":"旧ZIPを退避して新版を生成。配布79画面を生成し15画面はA4確認画像と一致。初回取得・通信制限再起動、CPU96/96最大6,702ms・概要6/6最大44,131ms Passed。ZIP・同梱ファイル不変と一時データ回収を確認。生成JSON1338行を含む。"},
+      {"id":"A5c","status":"Passed","changedLinesUpperBound":500,"result":"実測・限界・復旧手順を記録。差分・JSON・文書リンク・旧履歴保持・配布と退避ZIPのハッシュを確認。保護ファイル不変、Git index.lockなし。既存の要件編集を保持。"}
+    ]}
+  ],
   "headerVersion": "v0.7.0",
   "headerImplementationStatus": "Completed",
   "headerTasks": [

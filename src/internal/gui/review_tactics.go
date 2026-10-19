@@ -192,13 +192,13 @@ func (g *window) refreshTactics(p *diagramPosition, turn int) {
 // tacticsStatus は解析待ち・失敗・途中結果と実際に使った読みの長さを区別する。
 func (g *window) tacticsStatus(p *diagramPosition) string {
 	if a := p.readSource; a != nil && a.LocalRead && !a.Partial {
-		return "AI推定（死活の保証ではありません）"
+		return "AIの予測です。石の安全を保証するものではありません"
 	}
 	if g.controller.Err != nil {
 		return "AI解析失敗：閉じて再試行できます"
 	}
 	if g.controller.Busy {
-		return "AI解析中：青線は連結済み"
+		return "AI解析中：青線の石はつながっています"
 	}
-	return "AI未確定：青線は連結済み"
+	return "AI未確定：青線の石はつながっています"
 }

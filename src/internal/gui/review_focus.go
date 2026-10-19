@@ -58,7 +58,7 @@ func moveFocusTargets(before, after *app.Board, move app.Move, facts moveFacts) 
 	if before == nil || after == nil || move.Point < 0 || move.Point >= len(after.Cells) {
 		return nil
 	}
-	targets := []focusTarget{{label: "着手した連", point: move.Point}}
+	targets := []focusTarget{{label: "打った石のまとまり", point: move.Point}}
 	seen := make([]bool, len(before.Cells))
 	add := func(label string, point int) {
 		if seen[point] {
@@ -72,19 +72,19 @@ func moveFocusTargets(before, after *app.Board, move app.Move, facts moveFacts) 
 	}
 	for p, color := range before.Cells {
 		if color == move.Color.Other() && after.Cells[p] == app.Empty {
-			add("取られた連", p)
+			add("取られた石", p)
 		}
 	}
 	for _, group := range facts.rescued {
-		add("助けた連", group.point)
+		add("空きが増えた石", group.point)
 	}
 	for _, group := range facts.attacked {
-		add("アタリにした連", group.point)
+		add("アタリになった石", group.point)
 	}
 	if facts.connected >= 2 {
 		for _, p := range app.Neighbors(move.Point, before.Size) {
 			if before.Cells[p] == move.Color {
-				add("つないだ連", p)
+				add("つないだ石", p)
 			}
 		}
 	}

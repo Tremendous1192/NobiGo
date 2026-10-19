@@ -70,6 +70,38 @@ func TestSummaryPagesUseEvidence(t *testing.T) {
 	}
 }
 
+// TestSummaryImprovementUsesCurrentAdvice は概要4ページ目が通常感想戦と同じ手の平易な要約を使うことを検証する。
+func TestSummaryImprovementUsesCurrentAdvice(t *testing.T) {
+	for _, rule := range []app.Rule{app.Japanese, app.Chinese, app.Jungo} {
+		for _, player := range []app.Color{app.Black, app.White} {
+			g := summaryWindow(t, rule, player)
+			c := g.controller
+			_, body, move := summaryPageContent(c, 3)
+			if move == nil {
+				t.Fatal("fixture has no improvement")
+			}
+			before, err := c.Snapshot(move.Turn - 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			after, err := c.Snapshot(move.Turn)
+			if err != nil {
+				t.Fatal(err)
+			}
+			advice := reviewAdvice(c, move.Turn, before, after)
+			if !strings.Contains(body, advice.summary) || !strings.Contains(advice.summary, "あなたの") || !strings.Contains(body, "結果は確定していません") {
+				t.Fatalf("overview advice differs or lost uncertainty: %s", body)
+			}
+			d := newSummaryDialog(nil, nil)
+			d.page = 3
+			g.refreshSummaryPage(d)
+			if d.board == nil || len(d.board.Moves) != move.Turn-1 || d.body != body {
+				t.Fatal("overview paired advice with the wrong board")
+			}
+		}
+	}
+}
+
 // TestSummaryUnknownIsNotBadPlay は根拠不足を悪手やゼロ損失と表現せず、純碁でも確定得点を使うことを検証する。
 func TestSummaryUnknownIsNotBadPlay(t *testing.T) {
 	g := summaryWindow(t, app.Jungo, app.White)

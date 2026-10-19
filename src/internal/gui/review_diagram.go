@@ -56,11 +56,11 @@ func (g *window) drawReviewDiagram(screen *ebiten.Image, d *reviewDiagram) {
 	g.drawDiagramBoard(screen, d, r)
 	g.drawDiagramOverview(screen, d, image.Rect(940, 300, 1110, 470))
 	group, ok := d.selectedGroup()
-	status := "石を選ぶと、同じ連を囲みます。"
+	status := "石を選ぶと、つながった石を囲みます。"
 	if ok {
-		status = fmt.Sprintf("%s %s：連%d石", colorName(p.cells[d.point]), adviceVertex(d.point, p.size), len(group.stones))
+		status = fmt.Sprintf("%s %s：つながった石%d個・空き%dか所", colorName(p.cells[d.point]), adviceVertex(d.point, p.size), len(group.stones), len(group.liberties))
 	} else if d.point >= 0 {
-		status = adviceVertex(d.point, p.size) + "は空点です。前後を切り替えて確認。"
+		status = adviceVertex(d.point, p.size) + "は空いています。着手前後を切り替えて確認。"
 	}
 	g.label(screen, g.fit(status, 460, 17), 650, 602, 17, foreground)
 	outStones, _ := d.outsideCounts()
@@ -69,7 +69,7 @@ func (g *window) drawReviewDiagram(screen *ebiten.Image, d *reviewDiagram) {
 		caption = "着手前"
 	}
 	if outStones > 0 {
-		caption += fmt.Sprintf(" · 図外の同じ連：%d石（総数に含む）", outStones)
+		caption += fmt.Sprintf(" · 図の外につながる石%d個も含めた数です", outStones)
 	}
 	g.label(screen, caption, 650, 632, 14, warning)
 	view := d.viewport()
@@ -177,7 +177,7 @@ func (g *window) drawDiagramOverview(screen *ebiten.Image, d *reviewDiagram, r i
 	}
 	g.label(screen, stage, float64(r.Min.X), float64(r.Max.Y+38), 14, muted)
 	g.label(screen, fmt.Sprintf("AI %d変化・最大%d手", p.read.variations, p.read.depth), float64(r.Min.X), float64(r.Max.Y+62), 12, muted)
-	g.label(screen, "共有呼吸点への攻めを\n読めた範囲で連絡評価", float64(r.Min.X), float64(r.Max.Y+82), 12, muted)
+	g.label(screen, "石の間を攻められても\nつながるかをAIが推定", float64(r.Min.X), float64(r.Max.Y+82), 12, muted)
 }
 
 // drawDiagramBoard は選択連・着手番号と着目範囲内のつながりを部分図へ重ねる。
