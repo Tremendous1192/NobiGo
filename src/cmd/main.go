@@ -1,6 +1,6 @@
-// 作成日: 2026-10-18。PlayGoの引数と起動・終了を管理する。
+// 作成日: 2026-10-18。NobiGoの引数と起動・終了を管理する。
 
-// PlayGo はローカルのCPU囲碁ゲームを起動し、ウィンドウ終了時に資源を解放する。
+// NobiGo はローカルのCPU囲碁ゲームを起動し、ウィンドウ終了時に資源を解放する。
 package main
 
 import (
@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Tremendous1192/PlayGo/internal/gui"
+	"github.com/Tremendous1192/NobiGo/internal/gui"
 )
 
 // main は終了コードへ変換する。

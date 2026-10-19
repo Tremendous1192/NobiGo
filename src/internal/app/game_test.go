@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Tremendous1192/PlayGo/engine"
+	"github.com/Tremendous1192/NobiGo/engine"
 )
 
 type fakeQuery struct {

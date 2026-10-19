@@ -1,5 +1,17 @@
 {
   "updated": "2026-10-19",
+  "renameVersion": "v0.5.0",
+  "renameImplementationStatus": "Completed",
+  "renameTasks": [
+    {"id":"T0","status":"Passed","sourceChangedLines":5,"result":"要件の版・Goモジュール・最低仕様未定と今回PCの実測公開だけを最小修正。"},
+    {"id":"T1","status":"Passed","sourceChangedLines":18,"result":"表示名・保存エラー案内をNobiGo、タイトルをNobiGo(v0.5.0)へ変更。"},
+    {"id":"T2","status":"Passed","sourceChangedLines":108,"result":"Goモジュール・内部import・ツールの実行元検査を変更。PLAYGO_*、プロフィールID・JSON形式、依存版は維持。"},
+    {"id":"T3","status":"Passed","sourceChangedLines":152,"result":"EXE・ZIPルート・配布名・検証出力を改名。旧ルート・旧EXE・個人データ・不正パスを拒否するテストを追加。"},
+    {"id":"T4","status":"Passed","sourceChangedLines":62,"result":"開発・配布説明と出所一覧を更新。旧profileはバックアップ後、新規展開先の空フォルダーへコピーする手順を記載。"},
+    {"id":"T5a","status":"Passed","sourceChangedLines":14,"result":"許可された固定版をプロジェクト内へ取得・照合。既存MinGWでKataGoを再生成。4ツールのCRLFモジュール判定を修正。"},
+    {"id":"T5b","status":"Passed","sourceChangedLines":5,"result":"ZIPルート直下からの親移動を回帰テストで再現して拒否。fmt/vet/test/build、mod tidy/verify、govulncheck到達0件、実AI3ルール・読み筋が成功。通常232テスト・サブテスト成功。"},
+    {"id":"T5c","status":"Passed","sourceChangedLines":1373,"result":"新版ZIPの全ハッシュ・空のprofile・58画面生成・10画面目視・一時データ削除を確認。CPU96/96は最大6388ms、概要6/6は最大39743ms、次局CPUは最大3476ms。今回PCの実測を記録。"}
+  ],
   "overviewImplementationStatus": "Completed",
   "overviewTasks": [
     {"id":"T15","status":"Passed","changedLines":102,"result":"生存見込みも複数の合法な読み筋を確認して安定表示。低探索・無変化・違法・捕獲を検証。fmt/vet/test/build Passed。通信・パーサーは変更不要。Task計測用の.work/summary-audit.go 45行を含む。"},

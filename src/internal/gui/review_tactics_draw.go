@@ -5,7 +5,7 @@ import (
 	"image"
 	"math"
 
-	"github.com/Tremendous1192/PlayGo/internal/app"
+	"github.com/Tremendous1192/NobiGo/internal/app"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )

@@ -7,8 +7,8 @@ import (
 	"math"
 	"time"
 
-	"github.com/Tremendous1192/PlayGo/engine"
-	"github.com/Tremendous1192/PlayGo/internal/app"
+	"github.com/Tremendous1192/NobiGo/engine"
+	"github.com/Tremendous1192/NobiGo/internal/app"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
@@ -135,7 +135,7 @@ func (g *window) drawScoring(screen *ebiten.Image) {
 	g.button(screen, image.Rect(35, 741, 290, 788), "待ったで対局へ戻る", true, func() { c.Undo() })
 	g.button(screen, image.Rect(805, 741, 1145, 788), "この点数で確定する", g.scoreError == "", func() {
 		if err := c.Complete(g.dead, g.seki); err != nil {
-			g.scoreError = "保存できません。他のPlayGoを閉じて再試行してください。"
+			g.scoreError = "保存できません。他のNobiGoを閉じて再試行してください。"
 			return
 		}
 		g.updateSelectedProfile()

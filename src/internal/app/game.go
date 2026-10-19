@@ -9,7 +9,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/Tremendous1192/PlayGo/engine"
+	"github.com/Tremendous1192/NobiGo/engine"
 )
 
 // CPUResponseLimit は操作確定からCPU着手の描画完了までの受入上限。

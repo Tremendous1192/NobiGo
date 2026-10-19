@@ -35,8 +35,9 @@ func run() (result error) {
 		return err
 	}
 	mod, err := os.ReadFile("go.mod")
-	if err != nil || !strings.Contains(string(mod), "module github.com/Tremendous1192/PlayGo\n") {
-		return errors.New("run from PlayGo/src")
+	// WindowsのチェックアウトでCRLFになっても同じモジュールとして扱う。
+	if err != nil || !strings.Contains(strings.ReplaceAll(string(mod), "\r\n", "\n"), "module github.com/Tremendous1192/NobiGo\n") {
+		return errors.New("run from NobiGo/src")
 	}
 	if err = verifyAssets(root); err != nil {
 		return err
@@ -50,13 +51,13 @@ func run() (result error) {
 		return err
 	}
 	defer func() { result = errors.Join(result, os.RemoveAll(stage)) }()
-	appDir := filepath.Join(stage, "PlayGo")
+	appDir := filepath.Join(stage, "NobiGo")
 	if err = os.MkdirAll(appDir, 0700); err != nil {
 		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "go", "build", "-trimpath", "-buildvcs=false", "-ldflags=-H=windowsgui", "-o", filepath.Join(appDir, "PlayGo.exe"), "./cmd")
+	cmd := exec.CommandContext(ctx, "go", "build", "-trimpath", "-buildvcs=false", "-ldflags=-H=windowsgui", "-o", filepath.Join(appDir, "NobiGo.exe"), "./cmd")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err = cmd.Run(); err != nil {
@@ -126,7 +127,7 @@ func run() (result error) {
 	if err = os.WriteFile(filepath.Join(appDir, "checksums.json"), append(data, '\n'), 0600); err != nil {
 		return err
 	}
-	archive := filepath.Join(stage, "PlayGo-v0.4.0-windows-amd64.zip")
+	archive := filepath.Join(stage, "NobiGo-v0.5.0-windows-amd64.zip")
 	if err = makeZip(appDir, archive); err != nil {
 		return err
 	}
@@ -292,7 +293,7 @@ func goLicenses(ctx context.Context, dir string) error {
 	return copyFile(filepath.Join(strings.TrimSpace(string(data)), "LICENSE"), filepath.Join(dir, "licenses", "Go.txt"))
 }
 
-// makeZip は順序と日時を固定し、生成物だけをPlayGoディレクトリ配下へ格納する。
+// makeZip は順序と日時を固定し、生成物だけをNobiGoディレクトリ配下へ格納する。
 func makeZip(source, target string) (result error) {
 	f, err := os.Create(target)
 	if err != nil {
@@ -320,7 +321,7 @@ func makeZip(source, target string) (result error) {
 		if err != nil {
 			return err
 		}
-		name := "PlayGo/"
+		name := "NobiGo/"
 		if rel != "." {
 			name += filepath.ToSlash(rel)
 		}

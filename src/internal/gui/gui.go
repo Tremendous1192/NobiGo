@@ -1,6 +1,6 @@
 // 作成日: 2026-10-18。日本語GUIの起動と描画を担当する。GUI操作はメインスレッドに限定する。
 
-// Package gui はPlayGoの日本語画面を描画する。
+// Package gui はNobiGoの日本語画面を描画する。
 package gui
 
 import (
@@ -15,8 +15,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/Tremendous1192/PlayGo/engine"
-	"github.com/Tremendous1192/PlayGo/internal/app"
+	"github.com/Tremendous1192/NobiGo/engine"
+	"github.com/Tremendous1192/NobiGo/internal/app"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/exp/textinput"
@@ -128,7 +128,7 @@ func Run(options Options) (result error) {
 		}
 		result = errors.Join(result, g.engine.Close())
 	}()
-	ebiten.SetWindowTitle("PlayGo(v0.4.0)")
+	ebiten.SetWindowTitle("NobiGo(v0.5.0)")
 	ebiten.SetWindowSize(1180, 800)
 	if g.previewMinimum {
 		ebiten.SetWindowSize(885, 600)

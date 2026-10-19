@@ -1,4 +1,4 @@
-# PlayGo v0.4.0
+# NobiGo v0.5.0
 
 作成日: 2026-10-18。初心者向けのWindows囲碁ゲーム。日本・中国・純碁、7/9/11/13/15/19路、5段階の難易度に対応する。
 日本語GUIでCPUと対局し、採点確認と感想戦まで行う。配布利用者向けの操作説明は [README.txt](README.txt)。
@@ -6,7 +6,7 @@
 
 ## 構成
 
-この説明の `/` は `C:\dev\PlayGo` を指す。
+この説明の `/` は `C:\dev\NobiGo` を指す。
 
 | 場所 | 役割 |
 | --- | --- |
@@ -16,7 +16,7 @@
 | `/src/engine/` | KataGo通信、期限、プロセス管理、設定、互換ヘッダー |
 | `/src/profile/` | 開発実行時の個人データ。Git・配布対象外 |
 | `/src/tools/` | 資産取得、エンジンビルド、ZIP作成、単体応答測定 |
-| `/codex/task-status.json` | 旧版の履歴とv0.4.0のT1～T21の実行結果。Taskは統合しない |
+| `/codex/task-status.json` | 旧版の履歴とv0.5.0のT0～T5の実行結果。Taskは統合しない |
 
 対局状態はGUIスレッドが所有し、解析は1つの作業・1件の待機キューで実行する。
 待った・中止・局面変更では解析を取り消し、世代番号で古い応答を破棄する。
@@ -58,6 +58,7 @@ GUI終了時は作業を待ち、KataGoも終了する。
 
 Windows 11 / amd64、Go 1.26.4、既存のMinGW GCC 16.1.0を使う。
 `dev.cmd` はGoのキャッシュ・一時ファイル・ツールチェーンをプロジェクトの `.cache` 内へ隔離する。
+Goモジュール名は `github.com/Tremendous1192/NobiGo`。テスト用の `PLAYGO_*` 環境変数名は旧版との互換性のため維持する。
 本番ビルドは `CGO_ENABLED=0`。race検査だけ、既存GCCを使用してcgoを有効にする。
 初回準備はネット接続が必要。Go・モデルなどのダウンロード先はプロジェクト内で、システム設定は変更しない。
 資産取得にはWindowsの `curl.exe` を使い、HTTPS・3分・256MiBの上限とSHA-256照合を適用する。検証済みcurlは8.21.0。
@@ -65,13 +66,13 @@ Windows 11 / amd64、Go 1.26.4、既存のMinGW GCC 16.1.0を使う。
 VS CodeのCommand Prompt、または通常のcmdで実行する。
 
 ```cmd
-cd /d C:\dev\PlayGo\src
+cd /d C:\dev\NobiGo\src
 dev.cmd version
 dev.cmd env GOCACHE GOMODCACHE GOPATH GOTOOLCHAIN
 dev.cmd mod download
 dev.cmd run ./tools/assets
 dev.cmd run ./tools/enginebuild
-dev.cmd run ./cmd -root C:\dev\PlayGo\src
+dev.cmd run ./cmd -root C:\dev\NobiGo\src
 ```
 
 MinGWが別の場所にある場合、最後から2行目に `-mingw` と既存MinGWの絶対パスを指定する。
@@ -88,7 +89,7 @@ MinGW/WindowsのAVX戻り値で異常終了を再現したため、AVX2を有効
 ## 検証
 
 ```cmd
-cd /d C:\dev\PlayGo\src
+cd /d C:\dev\NobiGo\src
 check.cmd
 dev.cmd test -race -count=1 ./...
 dev.cmd mod verify
@@ -100,11 +101,11 @@ dev.cmd run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
 テストはプロジェクト内の一時データを使用する。実エンジン検査は通常のテストから除外している。
 
 ```cmd
-cd /d C:\dev\PlayGo\src
-set "PLAYGO_ENGINE_ROOT=C:\dev\PlayGo\src"
+cd /d C:\dev\NobiGo\src
+set "PLAYGO_ENGINE_ROOT=C:\dev\NobiGo\src"
 dev.cmd test -count=1 -run TestRealEngine -v ./engine
 set "PLAYGO_ENGINE_ROOT="
-dev.cmd run ./cmd -root C:\dev\PlayGo\src -verify C:\dev\PlayGo\.work\acceptance.json
+dev.cmd run ./cmd -root C:\dev\NobiGo\src -verify C:\dev\NobiGo\.work\acceptance.json
 ```
 
 受入測定は全ルール・路数・難易度の90条件と、19路のCPU先手・プレイヤーパス6条件で行う。
@@ -132,19 +133,19 @@ AI推定の合成例は `review-ai` / `review-ai-19` / `review-detail-ai` / `rev
 合成局面であることを画面に明記し、プロフィールを読み書きしない。
 
 ```cmd
-cd /d C:\dev\PlayGo\src
-dev.cmd run ./cmd -preview startup -screenshot C:\dev\PlayGo\.work\startup.png
+cd /d C:\dev\NobiGo\src
+dev.cmd run ./cmd -preview startup -screenshot C:\dev\NobiGo\.work\startup.png
 ```
 
 ## EXEと配布ZIP
 
 ```cmd
-cd /d C:\dev\PlayGo\src
+cd /d C:\dev\NobiGo\src
 dev.cmd run ./tools/package
 dev.cmd run ./tools/verify
 ```
 
-`/dist/PlayGo-v0.4.0-windows-amd64.zip` と `.sha256` を生成する。
+`/dist/NobiGo-v0.5.0-windows-amd64.zip` と `.sha256` を生成する。
 GUI EXEは `-trimpath -buildvcs=false -ldflags=-H=windowsgui` で作成し、個人パスを除去する。
 デバッグ用情報の一括削除は行わない。署名は付けていない。
 ZIPにはEXE、CPUエンジン、モデル、設定、日本語説明、空のprofile、ライセンス、出所・ハッシュを含める。
@@ -152,7 +153,7 @@ Microsoft VC、CUDA、OpenCL、OpenSSLのDLLや、ユーザーのプロフィー
 同梱Eigenソースは未変更で、MPLのソース提供にも対応する。
 `tools/verify` はZIPを専用一時フォルダーへ展開し、全ハッシュ・空のprofile・58画面・実エンジンのCPU着手96条件と概要6条件を検査する。
 色分け待ちも測定するため全体の停止期限は20分。展開先は終了時に回収する。
-画像は `.work/package-v0.4.0-*.png`、測定値は `/codex/acceptance-v0.4.0-T21.json` に残す。
+画像は `.work/package-v0.5.0-*.png`、測定値は `/codex/acceptance-v0.5.0.json` に残す。
 旧版の測定値は比較用に保持する。
 
 ## 採点・推定値・保存の限界
@@ -163,8 +164,9 @@ Microsoft VC、CUDA、OpenCL、OpenSSLのDLLや、ユーザーのプロフィー
 セキ候補は共有する空点と二眼の静的検査からの提案であり、複雑な死活の完全判定ではない。
 推定棋力は公式段級位と対応を保証しない。難易度の目標勝数は複数局での調整目安である。
 プロフィールはID別JSON、改名時もID維持、Revisionで競合検出、保存前バックアップと同一ディレクトリ置換を行う。
+PlayGoから移行する場合は両方のアプリを終了し、旧版の `profile` 全体をバックアップして、新規展開したNobiGoの空の `profile` へコピーする。ID・JSON形式は変更しない。既存データ同士を上書き・統合しない。
 完了した結果要約は最新1000局を保持し、通算成績は残す。対局中の棋譜は終了後に復元しない。
 
-試験機はIntel Core i7-12650H、物理メモリ32,472MB。より低いCPU・メモリの最低条件は未検証。
+最低CPU・メモリは未定。今回のPC構成と実測結果は検証記録へ記載し、その環境での結果として公開する。
 日本語IMEの実操作、専用GPUなしの別PC、異なるDPI・ディスプレイでの見え方は手動確認が必要。
-検証結果は [実行記録](../codex/task-status.json)、[概要追加後の受入測定](../codex/acceptance-v0.4.0-T21.json)、[検証範囲](../codex/validation.md) を参照する。
+検証結果は [実行記録](../codex/task-status.json)、[v0.5.0の受入測定](../codex/acceptance-v0.5.0.json)、[検証範囲](../codex/validation.md) を参照する。

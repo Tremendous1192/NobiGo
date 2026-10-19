@@ -5,7 +5,7 @@ import (
 	"image"
 	"math"
 
-	"github.com/Tremendous1192/PlayGo/internal/app"
+	"github.com/Tremendous1192/NobiGo/internal/app"
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
@@ -58,7 +58,7 @@ func (g *window) saveRank(rule, index int) {
 	p := g.profiles[g.selected]
 	p.Ranks[rule] = float64(index)
 	if err := g.store.Save(&p); err != nil {
-		g.notice = "棋力を保存できません。他のPlayGoを閉じて再度お試しください。"
+		g.notice = "棋力を保存できません。他のNobiGoを閉じて再度お試しください。"
 		return
 	}
 	g.profiles[g.selected] = p
@@ -71,7 +71,7 @@ func (g *window) begin() {
 		return
 	}
 	if err := g.controller.Start(g.profiles[g.selected], g.settings); err != nil {
-		g.notice = "開始できません。他のPlayGoを閉じ、保存先の書き込み権限を確認してください。"
+		g.notice = "開始できません。他のNobiGoを閉じ、保存先の書き込み権限を確認してください。"
 		return
 	}
 	g.profiles[g.selected] = g.controller.Profile
@@ -80,7 +80,7 @@ func (g *window) begin() {
 
 // drawStartup は要件の順番で設定を並べる。
 func (g *window) drawStartup(screen *ebiten.Image) {
-	g.label(screen, "PlayGo", 50, 28, 44, foreground)
+	g.label(screen, "NobiGo", 50, 28, 44, foreground)
 	g.label(screen, "囲碁を、楽しく。あなたのペースで一局ずつ。", 52, 91, 21, muted)
 	status := "CPUエンジン 準備完了"
 	c := accent

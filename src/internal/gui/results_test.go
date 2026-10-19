@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Tremendous1192/PlayGo/engine"
-	"github.com/Tremendous1192/PlayGo/internal/app"
+	"github.com/Tremendous1192/NobiGo/engine"
+	"github.com/Tremendous1192/NobiGo/internal/app"
 )
 
 // TestScoreMarkTransitions は死石の再選択で解除され、セキとの矛盾が残らないことを検証する。

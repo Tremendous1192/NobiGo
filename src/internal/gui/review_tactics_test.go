@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Tremendous1192/PlayGo/engine"
-	"github.com/Tremendous1192/PlayGo/internal/app"
+	"github.com/Tremendous1192/NobiGo/engine"
+	"github.com/Tremendous1192/NobiGo/internal/app"
 )
 
 // TestRealReviewReading は明示したローカルAIの応答を合法再生し、盤面の推定へ取り込めることを検証する。

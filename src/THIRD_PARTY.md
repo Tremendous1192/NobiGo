@@ -1,8 +1,8 @@
 # 配布資産と出所
 
-作成日: 2026-10-18。PlayGo v0.1.0 の配布物に含める著作権表示を整理する。
+作成日: 2026-10-18。NobiGo v0.5.0 の配布物に含める著作権表示を整理する。
 
-PlayGo本体はリポジトリのMITライセンスに従う。第三者の資産には各ライセンスが適用される。
+NobiGo本体はリポジトリのMITライセンスに従う。第三者の資産には各ライセンスが適用される。
 取得URLとSHA-256は `assets.lock.json`、生成したエンジンのSHA-256は `engine/build-provenance.json` に記録する。
 
 | 資産 | 版・出所 | 配布時の表示 |
@@ -16,7 +16,7 @@ PlayGo本体はリポジトリのMITライセンスに従う。第三者の資�
 | Go / Ebitengineほか | Go 1.26.4、Ebitengine 2.9.9、`go.mod` / `go.sum` | `Go.txt`、`Go-modules/`。ビルド時の実モジュールから収集 |
 
 KataGoはCPU用Eigenバックエンド、SSE2、分散学習無効、libzipなしでビルドする。
-旧MSVCRTを使うMinGW向けに、PlayGoの `engine/build/mingw_compat.h` を追加してビルドする。
+旧MSVCRTを使うMinGW向けに、NobiGoの `engine/build/mingw_compat.h` を追加してビルドする。
 元のKataGoソースは変更しない。GCC・zlib・スレッドランタイムは静的リンクし、Windows標準DLLへの依存だけを許可する。
 MicrosoftのVCランタイム、CUDA、OpenCL、OpenSSLのDLLは配布ZIPに含めない。
 

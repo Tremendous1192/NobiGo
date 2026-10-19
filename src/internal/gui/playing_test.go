@@ -3,8 +3,8 @@ package gui
 
 import (
 	"bytes"
-	"github.com/Tremendous1192/PlayGo/engine"
-	"github.com/Tremendous1192/PlayGo/internal/app"
+	"github.com/Tremendous1192/NobiGo/engine"
+	"github.com/Tremendous1192/NobiGo/internal/app"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 	"image"
 	"math"

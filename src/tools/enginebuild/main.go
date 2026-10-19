@@ -36,8 +36,9 @@ func run() error {
 		return err
 	}
 	mod, err := os.ReadFile("go.mod")
-	if err != nil || !strings.Contains(string(mod), "module github.com/Tremendous1192/PlayGo\n") {
-		return errors.New("run from PlayGo/src")
+	// WindowsのチェックアウトでCRLFになっても同じモジュールとして扱う。
+	if err != nil || !strings.Contains(strings.ReplaceAll(string(mod), "\r\n", "\n"), "module github.com/Tremendous1192/NobiGo\n") {
+		return errors.New("run from NobiGo/src")
 	}
 	cache := filepath.Join(root, "..", ".cache", "native")
 	cmake := filepath.Join(cache, "cmake-3.31.8-windows-x86_64", "bin", "cmake.exe")

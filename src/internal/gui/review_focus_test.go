@@ -7,7 +7,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/Tremendous1192/PlayGo/internal/app"
+	"github.com/Tremendous1192/NobiGo/internal/app"
 )
 
 // TestFocusMatchesCombinedAdvice は取り・攻撃・救出・連結の対象が本文から欠落しないことを検証する。

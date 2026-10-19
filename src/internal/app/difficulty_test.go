@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/Tremendous1192/PlayGo/engine"
+	"github.com/Tremendous1192/NobiGo/engine"
 )
 
 // TestStrengthBands は各難易度とルール別棋力が順序を保つことを検証する。

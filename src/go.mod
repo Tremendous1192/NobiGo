@@ -1,4 +1,4 @@
-module github.com/Tremendous1192/PlayGo
+module github.com/Tremendous1192/NobiGo
 
 go 1.26.0
 

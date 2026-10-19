@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Tremendous1192/PlayGo/engine"
-	"github.com/Tremendous1192/PlayGo/internal/app"
+	"github.com/Tremendous1192/NobiGo/engine"
+	"github.com/Tremendous1192/NobiGo/internal/app"
 )
 
 // TestOwnershipTimingTracksCurrentBoard は最初の描画だけを計測し、旧局面の評価や再描画を数えないことを検証する。

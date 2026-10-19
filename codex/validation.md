@@ -1,5 +1,46 @@
 # 実装・検証記録
 
+## v0.5.0：NobiGoへの改名 T0～T5
+
+実施日: 2026-10-19。T0（要件）、T1（表示）、T2（Goモジュール）、T3（配布）、T4（説明）を個別に実行。
+T5はT5a（固定資産・環境）、T5b（回帰検証）、T5c（配布・実測・記録）へ分割し、Taskは統合していない。
+ソースの追加＋削除行数は [task-status.json](task-status.json) の `renameTasks`、各Taskの前後は `/.work/v050-tasks/` に記録する。
+検証用補助スクリプト4ファイルの最終内容は合計82行。補助ファイルを含め、各Taskは10,000行以内。
+プロフィールID・JSON形式・`PLAYGO_*` は維持。開始時に存在したREADMEの改名説明と要件ファイルの改名を保持した。
+実行時に見つかったCRLFのモジュール判定とZIPの `NobiGo/../...` を最小修正し、後者は拒否テストで再現・確認した。
+
+| 検査 | 結果・範囲 |
+| --- | --- |
+| 書式・vet/test/build | Passed。変更Goファイルをgofmt。全体vet/test/build、通常232テスト・サブテスト成功。任意試験3件は通常実行でスキップ |
+| モジュール・資産 | Passed。mod tidy/verify。go.modのモジュール名以外の依存定義、go.sum、資産lock・ライセンス原文は不変 |
+| 脆弱性 | Passed。govulncheck v1.1.4で到達する脆弱性0件。未呼出しの指摘はimportパッケージ内8件・要求モジュール内26件 |
+| 実AI | Passed。日本・中国・純碁の通常/詳細解析と、GUIでの合法読み筋再生 |
+| 配布 | Passed。全ハッシュ・空のprofile・58画面生成・実行前後のZIPと展開内容の不変。一時プロフィール・展開先の削除も確認 |
+| CPU着手 | Passed。96/96条件、最大6,388ms（上限7,500ms）。色分け最大は着手前3,683ms・着手後1,764ms（上限4,500ms）。初回準備2,103ms |
+| 概要と次局 | Passed。6/6条件、各12局面、概要最大39,743ms（上限60,000ms）。終了後の次局CPUは最大3,476ms（上限7,500ms） |
+| 画像 | Passed。起動、対局、結果、終了後4択、19路感想戦、最小サイズ詳細、概要4ページの計10画面を目視 |
+
+今回WMIで確認したPCはIntel Core i7-12650H、物理メモリ34,049,220,608 bytes（約31.7GiB）、Windows 11 Home 10.0.26200 build 26200。
+Go 1.26.4 / Windows amd64 / CGO無効、Ebitengine 2.9.9、KataGo 1.17.1 Eigen/SSE2。
+承認された固定版を `/.cache` に取得し、既存MinGW GCC 16.1.0とCMake 3.31.8でCPUエンジンを生成した。
+生成元は `/src/tools/enginebuild/main.go`、出力は `/src/engine/runtime/katago.exe` と `/src/engine/build-provenance.json`。
+エンジンSHA-256: `ab2463bc34f7702c210638d67b0d4aa10d9a7d0a18c25dcfebf3ec042ead075c`。Windows標準DLL以外の依存がないことをビルド時に検査した。
+
+検証には `/.work/v050-go.cmd` を使用し、キャッシュ・一時ファイルをプロジェクト内に限定した。取得完了後は `GOPROXY=off`。
+実行: `go mod tidy`、`go mod verify`、`go vet ./...`、`go test -count=1 -timeout 120s -json ./...`、`go build ./...`、`govulncheck ./...`。
+実AIは `PLAYGO_ENGINE_ROOT=C:\dev\NobiGo\src` を指定し `go test -count=1 -timeout 120s -run TestReal -v ./engine ./internal/gui`。
+配布・受入は `go run ./tools/package`、`go run ./tools/verify`。再現時のcmd手順は [/src/README.md](../src/README.md)。
+測定中にビルド・別テストを並行実行せず、再試行なし。[実測JSON](acceptance-v0.5.0.json) は新版ZIPから自動生成した。
+測定はDraw完了までで、OSコンポジター・モニターの表示遅延は含まない。
+ログは `/.work/v050-*.log` と `/.work/v050-tests.jsonl`、画像は `/.work/package-v0.5.0-*.png`。
+
+配布物: [/dist/NobiGo-v0.5.0-windows-amd64.zip](../dist/NobiGo-v0.5.0-windows-amd64.zip)、118,828,560 bytes。
+SHA-256: `fa901676568e404f4e8c1ea41b63b79d923f706b0ad9576547b00afb9b1a3f09`。
+差分・JSON・改名箇所の整合を確認し、`git diff --check` はPassed。`/.git/index.lock` なし、削除操作なし。
+最低CPU・メモリは未定。今回の測定はこのPCでの結果として公開し、他機種の性能保証には使用しない。
+Not run：実入力・IMEの通し操作、別PC・異なるDPI、物理的なネット切断試験、初心者による難易度評価、race再実行（並行処理変更なし）。
+実ダウンロードの任意テストはNot run。固定資産の実取得とハッシュ照合はT5aで実施済み。
+
 ## v0.4.0：概要と生存見込み T15～T21
 
 実施日: 2026-10-19。承認されたT15～T21を統合せず順番に実行。

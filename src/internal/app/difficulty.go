@@ -8,7 +8,7 @@ import (
 	"math/rand/v2"
 	"slices"
 
-	"github.com/Tremendous1192/PlayGo/engine"
+	"github.com/Tremendous1192/NobiGo/engine"
 )
 
 // DifficultyName は保存値に対応する承認済み名称を返す。

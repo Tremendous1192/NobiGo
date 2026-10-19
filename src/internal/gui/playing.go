@@ -8,8 +8,8 @@ import (
 	"math"
 	"strconv"
 
-	"github.com/Tremendous1192/PlayGo/engine"
-	"github.com/Tremendous1192/PlayGo/internal/app"
+	"github.com/Tremendous1192/NobiGo/engine"
+	"github.com/Tremendous1192/NobiGo/internal/app"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
@@ -63,7 +63,7 @@ func (g *window) drawActive(screen *ebiten.Image) {
 	}
 	b := c.Board
 	turn := len(b.Moves)
-	g.label(screen, "PlayGo", 35, 22, 32, foreground)
+	g.label(screen, "NobiGo", 35, 22, 32, foreground)
 	g.label(screen, fmt.Sprintf("%s  ·  %d路  ·  %s", ruleName(b.Rule), b.Size, app.DifficultyName(c.Settings.Difficulty)), 230, 33, 21, muted)
 	g.label(screen, g.fit(c.Profile.Name+"（あなた："+colorName(c.Player)+"）", 470, 21), 670, 33, 21, foreground)
 	status := "あなたの番です。交点をクリックして打ちます。"

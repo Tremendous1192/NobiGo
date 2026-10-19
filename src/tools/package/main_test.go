@@ -38,7 +38,7 @@ func TestPackageArchive(t *testing.T) {
 	got := make(map[string]bool)
 	for _, file := range reader.File {
 		got[file.Name] = true
-		if file.Name != "PlayGo/README.txt" {
+		if file.Name != "NobiGo/README.txt" {
 			continue
 		}
 		stream, err := file.Open()
@@ -51,7 +51,7 @@ func TestPackageArchive(t *testing.T) {
 			t.Fatal("archive data differs")
 		}
 	}
-	for _, name := range []string{"PlayGo/", "PlayGo/profile/", "PlayGo/README.txt"} {
+	for _, name := range []string{"NobiGo/", "NobiGo/profile/", "NobiGo/README.txt"} {
 		if !got[name] {
 			t.Fatalf("missing entry: %s", name)
 		}

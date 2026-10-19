@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Tremendous1192/PlayGo/engine"
+	"github.com/Tremendous1192/NobiGo/engine"
 )
 
 // TestSummarySequentialAndReadOnly は概要が通常の単一解析を使い、結果保存や棋譜変更を行わないことを検証する。

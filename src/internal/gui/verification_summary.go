@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Tremendous1192/PlayGo/engine"
-	"github.com/Tremendous1192/PlayGo/internal/app"
+	"github.com/Tremendous1192/NobiGo/engine"
+	"github.com/Tremendous1192/NobiGo/internal/app"
 )
 
 // prepareSummaryPreview は4ページ・全路数・白視点・純碁・解析失敗・長文を明示した合成データで作る。

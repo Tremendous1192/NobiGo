@@ -3,7 +3,7 @@
   "Compiler": "MinGW GCC 16.1.0",
   "Backend": "Eigen 3.4.0 / SSE2 / CPU",
   "Source": "https://github.com/lightvector/KataGo/tree/v1.17.1",
-  "SHA256": "6b8ca40e468d139059825bc3875b90ae501ed5aa7537aafaeaa3b696461ee718",
+  "SHA256": "ab2463bc34f7702c210638d67b0d4aa10d9a7d0a18c25dcfebf3ec042ead075c",
   "Flags": [
     "BUILD_DISTRIBUTED=0",
     "NO_LIBZIP",

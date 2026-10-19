@@ -1,6 +1,6 @@
 // 作成日: 2026-10-18。生成ZIPを新しい一時フォルダーへ展開し、ハッシュ・画面・実CPU着手を確認する。
 
-// Verify はsrcから実行し、配布物の受入測定をcodex/acceptance-v0.4.0-T21.jsonへ記録する。実プレイヤー情報は扱わない。
+// Verify はsrcから実行し、配布物の受入測定をcodex/acceptance-v0.5.0.jsonへ記録する。実プレイヤー情報は扱わない。
 package main
 
 import (
@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -33,8 +34,9 @@ func run() (result error) {
 		return err
 	}
 	mod, err := os.ReadFile(filepath.Join(root, "go.mod"))
-	if err != nil || !strings.Contains(string(mod), "module github.com/Tremendous1192/PlayGo\n") {
-		return errors.New("run from PlayGo/src")
+	// WindowsのチェックアウトでCRLFになっても同じモジュールとして扱う。
+	if err != nil || !strings.Contains(strings.ReplaceAll(string(mod), "\r\n", "\n"), "module github.com/Tremendous1192/NobiGo\n") {
+		return errors.New("run from NobiGo/src")
 	}
 	work := filepath.Join(root, "..", ".work")
 	if err = os.MkdirAll(work, 0700); err != nil {
@@ -45,7 +47,7 @@ func run() (result error) {
 		return err
 	}
 	defer func() { result = errors.Join(result, os.RemoveAll(temp)) }()
-	archive := filepath.Join(root, "..", "dist", "PlayGo-v0.4.0-windows-amd64.zip")
+	archive := filepath.Join(root, "..", "dist", "NobiGo-v0.5.0-windows-amd64.zip")
 	want, err := os.ReadFile(archive + ".sha256")
 	if err != nil {
 		return err
@@ -60,22 +62,22 @@ func run() (result error) {
 	if err = extract(archive, temp); err != nil {
 		return err
 	}
-	appDir := filepath.Join(temp, "PlayGo")
+	appDir := filepath.Join(temp, "NobiGo")
 	if err = verifyContents(appDir); err != nil {
 		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
-	exe := filepath.Join(appDir, "PlayGo.exe")
+	exe := filepath.Join(appDir, "NobiGo.exe")
 	for _, mode := range []string{"startup", "game", "game-wait", "game-pass", "scoring", "result", "choices", "review", "review-player", "review-19", "review-detail", "review-detail-cpu", "review-detail-combined", "review-detail-wait", "review-detail-error", "review-detail-long", "review-detail-bottom", "review-detail-min", "game-white-jungo", "game-extremes", "game-gap", "review-detail-before", "review-detail-outside", "review-detail-pass", "review-detail-empty", "review-detail-7", "review-detail-9", "review-detail-11", "review-detail-13", "review-detail-15", "review-detail-19", "review-focus-moved", "review-focus-before", "review-ai", "review-ai-19", "review-detail-ai", "review-detail-ai-risk",
 		"summary-1", "summary-2", "summary-3", "summary-4", "summary-wait", "summary-error", "summary-missing", "summary-white", "summary-jungo", "summary-draw", "summary-empty", "summary-noresult", "summary-long", "summary-bottom", "summary-min", "summary-7", "summary-9", "summary-11", "summary-13", "summary-15", "summary-19"} {
-		cmd := exec.CommandContext(ctx, exe, "-preview", mode, "-screenshot", filepath.Join(work, "package-v0.4.0-"+mode+".png"))
+		cmd := exec.CommandContext(ctx, exe, "-preview", mode, "-screenshot", filepath.Join(work, "package-v0.5.0-"+mode+".png"))
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		if err = cmd.Run(); err != nil {
 			return fmt.Errorf("package screen %s: %w", mode, err)
 		}
 	}
-	cmd := exec.CommandContext(ctx, exe, "-verify", filepath.Join(root, "..", "codex", "acceptance-v0.4.0-T21.json"))
+	cmd := exec.CommandContext(ctx, exe, "-verify", filepath.Join(root, "..", "codex", "acceptance-v0.5.0.json"))
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err = cmd.Run(); err != nil {
 		return fmt.Errorf("package acceptance: %w", err)
@@ -108,7 +110,7 @@ func fileHash(path string) (hash string, result error) {
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
-// extract はPlayGo配下の通常ファイルだけを展開し、個人データと外部DLLを拒否する。
+// extract はNobiGo配下の通常ファイルだけを展開し、個人データと外部DLLを拒否する。
 func extract(archive, root string) (result error) {
 	z, err := zip.OpenReader(archive)
 	if err != nil {
@@ -122,7 +124,8 @@ func extract(archive, root string) (result error) {
 	for _, f := range z.File {
 		name := strings.TrimSuffix(f.Name, "/")
 		key := strings.ToLower(name)
-		if seen[key] || !filepath.IsLocal(name) || strings.ContainsAny(name, ":\\") || name != "PlayGo" && !strings.HasPrefix(name, "PlayGo/") {
+		// 接頭辞だけではNobiGo/../...がアプリ用ディレクトリの外へ出る。
+		if seen[key] || path.Clean(name) != name || !filepath.IsLocal(name) || strings.ContainsAny(name, ":\\") || name != "NobiGo" && !strings.HasPrefix(name, "NobiGo/") {
 			return errors.New("invalid package path")
 		}
 		seen[key] = true
@@ -133,7 +136,7 @@ func extract(archive, root string) (result error) {
 			}
 			continue
 		}
-		if !f.Mode().IsRegular() || f.UncompressedSize64 > 256<<20 || strings.HasPrefix(key, "playgo/profile/") || strings.HasSuffix(key, ".dll") {
+		if !f.Mode().IsRegular() || f.UncompressedSize64 > 256<<20 || strings.HasPrefix(key, "nobigo/profile/") || strings.HasSuffix(key, ".dll") {
 			return errors.New("unexpected package content")
 		}
 		if err = os.MkdirAll(filepath.Dir(target), 0700); err != nil {
@@ -175,7 +178,7 @@ func verifyContents(root string) error {
 	if err = json.Unmarshal(data, &hashes); err != nil {
 		return err
 	}
-	for _, required := range []string{"PlayGo.exe", "README.txt", "LICENSE.txt", "engine/analysis.cfg", "engine/build-provenance.json", "engine/runtime/katago.exe", "engine/runtime/model.bin.gz", "licenses/THIRD_PARTY.md", "licenses/Eigen-3.4.0-source.zip"} {
+	for _, required := range []string{"NobiGo.exe", "README.txt", "LICENSE.txt", "engine/analysis.cfg", "engine/build-provenance.json", "engine/runtime/katago.exe", "engine/runtime/model.bin.gz", "licenses/THIRD_PARTY.md", "licenses/Eigen-3.4.0-source.zip"} {
 		if len(hashes[required]) != 64 {
 			return fmt.Errorf("missing required package file: %s", required)
 		}

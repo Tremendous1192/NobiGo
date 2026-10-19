@@ -5,7 +5,7 @@ import (
 	"errors"
 	"math"
 
-	"github.com/Tremendous1192/PlayGo/engine"
+	"github.com/Tremendous1192/NobiGo/engine"
 )
 
 // SummaryMove は一手の実際の効果と着手側の評価を所有する。AlternativeはHasAlternative時だけ有効。

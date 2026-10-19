@@ -64,8 +64,9 @@ func run() error {
 		return err
 	}
 	module, err := os.ReadFile(filepath.Join(root, "go.mod"))
-	if err != nil || !bytes.Contains(module, []byte("module github.com/Tremendous1192/PlayGo\n")) {
-		return errors.New("run from PlayGo/src")
+	// WindowsのチェックアウトでCRLFになっても同じモジュールとして扱う。
+	if err != nil || !bytes.Contains(bytes.ReplaceAll(module, []byte("\r\n"), []byte("\n")), []byte("module github.com/Tremendous1192/NobiGo\n")) {
+		return errors.New("run from NobiGo/src")
 	}
 	lock := filepath.Join(root, "assets.lock.json")
 	list := seeds()
