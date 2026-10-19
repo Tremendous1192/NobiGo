@@ -1,8 +1,10 @@
-# NobiGo v0.6.0
+# NobiGo v0.7.0
 
 作成日: 2026-10-18。初心者向けのWindows囲碁ゲーム。日本・中国・純碁、7/9/11/13/15/19路、5段階の難易度に対応する。
 日本語GUIでCPUと対局し、採点確認と感想戦まで行う。配布利用者向けの操作説明は [README.txt](README.txt)。
 先攻・後攻の初期選択は「ランダム」。登録済みプレイヤーでは保存済みの選択を復元する。
+対局画面の上部はアプリ名・ルール・盤サイズ・そのルールのプレイヤー棋力・CPU難易度の順に表示する。
+右上はプレイヤー名と石色。長い名前だけを省略し、石色は常に残す。
 
 ## 構成
 
@@ -16,7 +18,7 @@
 | `/src/engine/` | KataGo通信、期限、プロセス管理、設定、互換ヘッダー |
 | `/src/profile/` | 開発実行時の個人データ。Git・配布対象外 |
 | `/src/tools/` | 資産取得、エンジンビルド、ZIP作成、単体応答測定 |
-| `/codex/task-status.json` | 旧版の履歴とv0.6.0のT0～T6の実行結果。Taskは統合しない |
+| `/codex/task-status.json` | 旧版の履歴とv0.7.0のT1～T4の実行結果。Taskは統合しない |
 
 対局状態はGUIスレッドが所有し、解析は1つの作業・1件の待機キューで実行する。
 待った・中止・局面変更では解析を取り消し、世代番号で古い応答を破棄する。
@@ -123,6 +125,8 @@ CPU着手は7,500ms以内。確定採点は色分け測定対象外で、途中�
 画面確認には次のコマンドを使う。`startup` を `game` / `game-wait` / `game-pass` / `scoring` / `result` / `choices` / `review` / `review-player` / `review-19` に替えられる。
 詳細の確認は `review-detail` / `review-detail-cpu` / `review-detail-combined` / `review-detail-wait` / `review-detail-error` / `review-detail-long` / `review-detail-bottom` / `review-detail-min`。
 初回準備の表示例は `startup-check` / `startup-download` / `startup-verify` / `startup-load` / `startup-error` / `startup-repair` / `startup-cancel`。
+対局上部は `game-header-7` / `game-header-9` / `game-header-11` / `game-header-13` / `game-header-15` / `game-header-19`、
+`game-header-chinese` / `game-header-jungo` / `game-header-long` / `game-header-min` で棋力・石色・名前の表示を確認する。
 追加の確認例は `game-white-jungo` / `game-extremes` / `game-gap` と、
 `review-detail-before` / `review-detail-outside` / `review-detail-pass` / `review-detail-empty`。
 全対応路数は `review-detail-7` / `review-detail-9` / `review-detail-11` / `review-detail-13` / `review-detail-15` / `review-detail-19`。
@@ -130,7 +134,7 @@ AI推定の合成例は `review-ai` / `review-ai-19` / `review-detail-ai` / `rev
 概要の合成例は `summary-1`～`summary-4`、`summary-wait` / `summary-error` / `summary-missing` / `summary-white` / `summary-jungo` / `summary-draw` / `summary-empty` / `summary-noresult` / `summary-long` / `summary-bottom` / `summary-min`。
 概要の全対応路数は `summary-7` / `summary-9` / `summary-11` / `summary-13` / `summary-15` / `summary-19`。
 詳細を閉じた後の範囲枠は `review-focus-moved`（移動後の19路）/ `review-focus-before`（着手前を選んで閉じた7路）。
-`review-detail-min` と `summary-min` は885×600で起動し、同サイズへ縮小した描画を保存する。OSや異なるDPIの見え方を保証する画像ではない。
+`game-header-min` / `review-detail-min` / `summary-min` は885×600で起動し、同サイズへ縮小した描画を保存する。OSや異なるDPIの見え方を保証する画像ではない。
 合成局面であることを画面に明記し、プロフィールを読み書きしない。
 
 ```cmd
@@ -146,7 +150,7 @@ dev.cmd run ./tools/package
 dev.cmd run ./tools/verify -download-model
 ```
 
-`/dist/NobiGo-v0.6.0-windows-amd64.zip` と `.sha256` を生成する。
+`/dist/NobiGo-v0.7.0-windows-amd64.zip` と `.sha256` を生成する。
 GUI EXEは `-trimpath -buildvcs=false -ldflags=-H=windowsgui` で作成し、個人パスを除去する。
 デバッグ用情報の一括削除は行わない。署名は付けていない。
 ZIPにはEXE、CPUエンジン、設定、日本語説明、空のprofile、モデルを含むライセンス、出所・ハッシュを含める。
@@ -156,15 +160,15 @@ ZIPにはEXE、CPUエンジン、設定、日本語説明、空のprofile、モ�
 取得と照合、エンジン読込みは別段階で表示・測定する。読込み期限は独立した30秒、CPU着手7.5秒の計測には含めない。
 Microsoft VC、CUDA、OpenCL、OpenSSLのDLLや、ユーザーのプロフィールは含めない。
 同梱Eigenソースは未変更で、MPLのソース提供にも対応する。
-`tools/verify -download-model` は明示的に実ダウンロードを許可する統合検査。ZIPを専用一時フォルダーへ展開し、全ハッシュ・空のprofile・65画面を確認する。
+`tools/verify -download-model` は明示的に実ダウンロードを許可する統合検査。ZIPを専用一時フォルダーへ展開し、全ハッシュ・空のprofile・75画面を確認する。
 配布EXEの `-prepare <出力JSON>` で初回取得と次回起動を測る。このオプションはプロフィールを読み書きせず、準備後に終了する。
 取得後の起動・CPU着手96条件・概要6条件は、子プロセスだけPATHを空にし、接続できないプロキシを設定して実行する。物理的なネット切断試験とは区別する。
 同梱ファイルは `checksums.json`、追加されたモデルは `assets.lock.json` で照合し、ZIP・同梱ファイルの不変を確認する。
 全体の停止期限は25分。自分で作った展開先は成功・失敗とも終了時に回収する。
-画像は `.work/package-v0.6.0-*.png`、測定値は `/codex/acceptance-v0.6.0.json` に残す。
-初回取得と再起動の測定は `/codex/preparation-v0.6.0.json` に記録する。旧版の測定値は比較用に保持する。
+画像は `.work/package-v0.7.0-*.png`、測定値は `/codex/acceptance-v0.7.0.json` に残す。
+初回取得と再起動の測定は `/codex/preparation-v0.7.0.json` に記録する。旧版の測定値は比較用に保持する。
 
-Git管理対象は `/dist/NobiGo-v0.6.0-windows-amd64.zip` だけで、100MiB未満を生成時に検査する。
+Git管理対象は `/dist/NobiGo-v0.7.0-windows-amd64.zip` だけで、100MiB未満を生成時に検査する。
 `*.sha256` はGit管理外だが生成を続ける。検証時は存在すれば照合必須、なければZIP内全ファイルとモデルの照合を行う。
 次のリリースでは `.gitignore` の許可名を更新し、追跡済みの旧ZIPは対象を確認して `git rm --cached -- dist/<旧ZIP名>` で追跡だけ解除する。
 この操作はリポジトリルートで行う。旧ZIPの実ファイルと過去の履歴は保持する。
@@ -182,4 +186,4 @@ PlayGoから移行する場合は両方のアプリを終了し、旧版の `pro
 
 最低CPU・メモリは未定。今回のPC構成と実測結果は検証記録へ記載し、その環境での結果として公開する。
 日本語IMEの実操作、専用GPUなしの別PC、異なるDPI・ディスプレイでの見え方は手動確認が必要。
-検証結果は [実行記録](../codex/task-status.json)、[v0.6.0の受入測定](../codex/acceptance-v0.6.0.json)、[検証範囲](../codex/validation.md) を参照する。
+検証結果は [実行記録](../codex/task-status.json)、[v0.7.0の受入測定](../codex/acceptance-v0.7.0.json)、[検証範囲](../codex/validation.md) を参照する。

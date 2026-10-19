@@ -38,6 +38,22 @@ func colorName(c app.Color) string {
 	return "引き分け"
 }
 
+// gameHeaderText は対局中のルール・盤サイズ・プレイヤー棋力・CPU難易度を表示順に返す。
+func gameHeaderText(c *app.Controller) string {
+	b := c.Board
+	rank := app.RankName(c.Profile.Ranks[app.RuleIndex(b.Rule)])
+	return fmt.Sprintf("%s  ·  %d路  ·  棋力%s  ·  %s", ruleName(b.Rule), b.Size, rank, app.DifficultyName(c.Settings.Difficulty))
+}
+
+// gamePlayerText は長い名前だけを省略し、プレイヤーの石色を必ず残す。
+func (g *window) gamePlayerText() string {
+	c := g.controller
+	suffix := "（あなた：" + colorName(c.Player) + "）"
+	g.face.Size = 21
+	width, _ := text.Measure(suffix, g.face, 31.5)
+	return g.fit(c.Profile.Name, 470-width, 21) + suffix
+}
+
 // currentAnalysis は指定手の解析だけを返す。前の局面の値を現在値として扱わない。
 func (g *window) currentAnalysis(turn int) *engine.Analysis {
 	if turn < 0 || turn >= len(g.controller.Evaluations) {
@@ -64,8 +80,8 @@ func (g *window) drawActive(screen *ebiten.Image) {
 	b := c.Board
 	turn := len(b.Moves)
 	g.label(screen, "NobiGo", 35, 22, 32, foreground)
-	g.label(screen, fmt.Sprintf("%s  ·  %d路  ·  %s", ruleName(b.Rule), b.Size, app.DifficultyName(c.Settings.Difficulty)), 230, 33, 21, muted)
-	g.label(screen, g.fit(c.Profile.Name+"（あなた："+colorName(c.Player)+"）", 470, 21), 670, 33, 21, foreground)
+	g.label(screen, gameHeaderText(c), 230, 34, 20, muted)
+	g.label(screen, g.gamePlayerText(), 670, 33, 21, foreground)
 	status := "あなたの番です。交点をクリックして打ちます。"
 	if b.ToMove != c.Player {
 		status = "CPUが考えています…"

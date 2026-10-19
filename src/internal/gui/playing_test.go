@@ -3,6 +3,7 @@ package gui
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/Tremendous1192/NobiGo/engine"
 	"github.com/Tremendous1192/NobiGo/internal/app"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
@@ -11,6 +12,90 @@ import (
 	"strings"
 	"testing"
 )
+
+// TestGameHeaderUsesCurrentRuleRank はルール別棋力と表示順、保存値の丸めを確認する。
+func TestGameHeaderUsesCurrentRuleRank(t *testing.T) {
+	c := &app.Controller{
+		Board: &app.Board{Size: 19}, Settings: app.DefaultSettings(),
+		Profile: app.Profile{Ranks: [3]float64{0, 29.49, 38}},
+	}
+	for _, tc := range []struct {
+		rule app.Rule
+		want string
+	}{
+		{app.Japanese, "日本ルール  ·  19路  ·  棋力30級  ·  いい勝負"},
+		{app.Chinese, "中国ルール  ·  19路  ·  棋力1級  ·  いい勝負"},
+		{app.Jungo, "純碁  ·  19路  ·  棋力9段  ·  いい勝負"},
+	} {
+		c.Board.Rule = tc.rule
+		if got := gameHeaderText(c); got != tc.want {
+			t.Fatalf("header=%q want=%q", got, tc.want)
+		}
+	}
+	c.Board.Rule = app.Chinese
+	c.Profile.Ranks[1] = 29.5
+	c.Settings.Difficulty = 4
+	if got := gameHeaderText(c); got != "中国ルール  ·  19路  ·  棋力1段  ·  大挑戦" {
+		t.Fatalf("updated game header=%q", got)
+	}
+}
+
+// TestGameHeaderFitsBoardColumn は全ルール・路数・棋力・難易度で上部が盤の左列に収まることを検証する。
+func TestGameHeaderFitsBoardColumn(t *testing.T) {
+	source, err := text.NewGoTextFaceSource(bytes.NewReader(fontData))
+	if err != nil {
+		t.Fatal(err)
+	}
+	face := &text.GoTextFace{Source: source, Size: 20}
+	c := &app.Controller{Board: &app.Board{}, Settings: app.DefaultSettings()}
+	for _, rule := range []app.Rule{app.Japanese, app.Chinese, app.Jungo} {
+		c.Board.Rule = rule
+		for _, size := range []int{7, 9, 11, 13, 15, 19} {
+			c.Board.Size = size
+			for rank := 0; rank <= 38; rank++ {
+				c.Profile.Ranks[app.RuleIndex(rule)] = float64(rank)
+				for difficulty := 0; difficulty < 5; difficulty++ {
+					c.Settings.Difficulty = difficulty
+					value := gameHeaderText(c)
+					width, _ := text.Measure(value, face, 30)
+					if width > 405 || strings.ContainsAny(value, "\n…") {
+						t.Fatalf("header exceeds board column: %q width=%f", value, width)
+					}
+					if !strings.Contains(value, fmt.Sprintf("%d路", size)) {
+						t.Fatal("board size missing")
+					}
+				}
+			}
+		}
+	}
+}
+
+// TestGamePlayerTextKeepsColor は長い名前でも黒白表示を省略せず、右列内に収めることを検証する。
+func TestGamePlayerTextKeepsColor(t *testing.T) {
+	source, err := text.NewGoTextFaceSource(bytes.NewReader(fontData))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &app.Controller{}
+	g := &window{face: &text.GoTextFace{Source: source}, controller: c}
+	for _, player := range []app.Color{app.Black, app.White} {
+		c.Player = player
+		for _, name := range []string{"あ", strings.Repeat("あ", 32), strings.Repeat("W", 32)} {
+			c.Profile.Name = name
+			got := g.gamePlayerText()
+			width, _ := text.Measure(got, g.face, 31.5)
+			if width > 470 || !strings.HasSuffix(got, "（あなた："+colorName(player)+"）") {
+				t.Fatalf("player label lost color or overflowed: %q width=%f", got, width)
+			}
+			if name == "あ" && got != name+"（あなた："+colorName(player)+"）" {
+				t.Fatal("short name changed")
+			}
+			if c.Profile.Name != name {
+				t.Fatal("display changed saved name")
+			}
+		}
+	}
+}
 
 // TestEvaluationRowKeepsPerspectiveAndFits は欠損・白視点・直前の着手側・純碁と許容最大値を1行で表示できることを検証する。
 func TestEvaluationRowKeepsPerspectiveAndFits(t *testing.T) {

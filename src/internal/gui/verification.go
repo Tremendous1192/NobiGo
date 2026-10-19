@@ -321,6 +321,15 @@ func (g *window) preparePreview(mode string) error {
 		return g.prepareAdvicePreview(mode)
 	}
 	size, moves := 9, 32
+	headerSize := map[string]int{
+		"game-header-7": 7, "game-header-9": 9, "game-header-11": 11,
+		"game-header-13": 13, "game-header-15": 15, "game-header-19": 19,
+		"game-header-chinese": 13, "game-header-jungo": 7,
+		"game-header-long": 19, "game-header-min": 19,
+	}[mode]
+	if headerSize > 0 {
+		size = headerSize
+	}
 	if mode == "review-19" {
 		size, moves = 19, 220
 	}
@@ -328,8 +337,10 @@ func (g *window) preparePreview(mode string) error {
 		moves = 31
 	}
 	rule := app.Japanese
-	if mode == "game-white-jungo" {
+	if mode == "game-white-jungo" || mode == "game-header-jungo" {
 		rule = app.Jungo
+	} else if mode == "game-header-chinese" {
+		rule = app.Chinese
 	}
 	b, err := fixtureBoard(size, rule, moves)
 	if err != nil {
@@ -338,8 +349,21 @@ func (g *window) preparePreview(mode string) error {
 	c := &app.Controller{Phase: app.Playing, Board: b, Player: app.Black, Settings: app.DefaultSettings(), Profile: app.Profile{Name: "画面確認用サンプル", Ranks: [3]float64{0, 0, 0}}}
 	g.controller = c
 	c.Settings.Rule, c.Settings.Size = rule, size
-	if mode == "game-white-jungo" {
+	if mode == "game-white-jungo" || mode == "game-header-chinese" {
 		c.Player = app.White
+	}
+	if headerSize > 0 {
+		c.Profile.Ranks = [3]float64{0, 30, 38}
+		c.Settings.Difficulty = 0
+		if rule == app.Chinese {
+			c.Settings.Difficulty = 4
+		} else if rule == app.Jungo {
+			c.Settings.Difficulty = 3
+		}
+		if mode == "game-header-long" || mode == "game-header-min" {
+			c.Profile.Name = strings.Repeat("あ", 32)
+		}
+		g.previewMinimum = mode == "game-header-min"
 	}
 	g.selected = 0
 	g.profiles = []app.Profile{c.Profile}
@@ -405,7 +429,7 @@ func (g *window) preparePreview(mode string) error {
 	}
 	c.Score = score
 	switch mode {
-	case "game":
+	case "game", "game-header-7", "game-header-9", "game-header-11", "game-header-13", "game-header-15", "game-header-19", "game-header-chinese", "game-header-jungo", "game-header-long", "game-header-min":
 	case "game-white-jungo":
 	case "game-extremes":
 		c.Evaluations[len(b.Moves)-1].ScoreLead = -20000

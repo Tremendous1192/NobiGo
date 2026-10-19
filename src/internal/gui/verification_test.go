@@ -10,6 +10,48 @@ import (
 	"github.com/Tremendous1192/NobiGo/internal/app"
 )
 
+// TestHeaderPreviewScenarios はルール別棋力・全路数・黒白・長い名前・最小画面を保存や実解析なしで検証する。
+func TestHeaderPreviewScenarios(t *testing.T) {
+	for _, tc := range []struct {
+		mode   string
+		size   int
+		rule   app.Rule
+		player app.Color
+		rank   string
+	}{
+		{"game-header-7", 7, app.Japanese, app.Black, "棋力30級"},
+		{"game-header-9", 9, app.Japanese, app.Black, "棋力30級"},
+		{"game-header-11", 11, app.Japanese, app.Black, "棋力30級"},
+		{"game-header-13", 13, app.Japanese, app.Black, "棋力30級"},
+		{"game-header-15", 15, app.Japanese, app.Black, "棋力30級"},
+		{"game-header-19", 19, app.Japanese, app.Black, "棋力30級"},
+		{"game-header-chinese", 13, app.Chinese, app.White, "棋力1段"},
+		{"game-header-jungo", 7, app.Jungo, app.Black, "棋力9段"},
+		{"game-header-long", 19, app.Japanese, app.Black, "棋力30級"},
+		{"game-header-min", 19, app.Japanese, app.Black, "棋力30級"},
+	} {
+		t.Run(tc.mode, func(t *testing.T) {
+			g := &window{previewMode: true}
+			if err := g.preparePreview(tc.mode); err != nil {
+				t.Fatal(err)
+			}
+			c := g.controller
+			if g.store != nil || g.engine != nil || c.Phase != app.Playing || c.Board.Passes >= 2 {
+				t.Fatal("preview used real resources or ended the game")
+			}
+			if c.Board.Size != tc.size || c.Board.Rule != tc.rule || c.Player != tc.player || !strings.Contains(gameHeaderText(c), tc.rank) {
+				t.Fatal("wrong header fixture")
+			}
+			if g.previewMinimum != (tc.mode == "game-header-min") {
+				t.Fatal("wrong window size")
+			}
+			if (tc.mode == "game-header-long" || tc.mode == "game-header-min") && len([]rune(c.Profile.Name)) != 32 {
+				t.Fatal("long name does not cover the limit")
+			}
+		})
+	}
+}
+
 // TestOwnershipTimingTracksCurrentBoard は最初の描画だけを計測し、旧局面の評価や再描画を数えないことを検証する。
 func TestOwnershipTimingTracksCurrentBoard(t *testing.T) {
 	b, err := app.NewBoard(9, app.Japanese)

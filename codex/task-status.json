@@ -1,5 +1,13 @@
 {
   "updated": "2026-10-19",
+  "headerVersion": "v0.7.0",
+  "headerImplementationStatus": "Completed",
+  "headerTasks": [
+    {"id":"T1","status":"Passed","sourceChangedLines":67,"recordChangedLines":8,"localLogLines":1,"totalChangedLines":76,"result":"対局ルールの棋力を盤サイズと難易度の間へ追加。全3ルール・6路数・39棋力・5難易度の幅と級段境界を検証し、GUI test/vet Passed。画面確認はT2/T4。"},
+    {"id":"T2","status":"Passed","sourceChangedLines":114,"recordChangedLines":2,"localLogLines":4,"totalChangedLines":120,"result":"上部表示の合成10例を追加。全路数・3ルール・黒白・32文字名・最小サイズを検証。長い名前だけを省略して石色を保持。GUI/verify test・vet・preview build Passed、代表3画面を目視。"},
+    {"id":"T3","status":"Passed","sourceChangedLines":44,"recordChangedLines":4,"localLogLines":2,"totalChangedLines":50,"result":"タイトル・ZIP名・検証出力先・Git除外をv0.7.0へ更新し、上部表示と75画面の検証手順を説明。package/verify test、差分・旧版表記・除外確認 Passed。"},
+    {"id":"T4","status":"Passed","sourceChangedLines":37,"recordChangedLines":10,"generatedRecordLines":1338,"localLogLines":1261,"localArtifactLines":16,"totalChangedLines":2662,"result":"全体vet/test/buildと通常277テスト成功。ZIP全ハッシュ・初回取得・通信制限下の再起動、CPU96/96最大6,878ms・概要6/6最大41,807ms Passed。75画面生成、上部10画面の目視とT2一致、既存58画面一致。旧ZIP保持・一時データ回収・保護ファイル不変を確認。"}
+  ],
   "downloadVersion": "v0.6.0",
   "downloadImplementationStatus": "Completed",
   "downloadTasks": [
