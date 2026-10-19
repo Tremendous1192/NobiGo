@@ -28,15 +28,19 @@ func TestProfileLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := p.ID
+	if p.Last.Side != 2 {
+		t.Fatal("new profile did not select random side")
+	}
 	p.Name = "練習用2"
 	p.Last.Size = 19
 	p.Last.Rule = Jungo
+	p.Last.Side = 0
 	p.Ranks[2] = 3
 	if err = s.Save(&p); err != nil {
 		t.Fatal(err)
 	}
 	loaded, err := s.Load(id)
-	if err != nil || loaded.Name != p.Name || loaded.Last.Size != 19 || loaded.Ranks[2] != 3 {
+	if err != nil || loaded.Name != p.Name || loaded.Last.Size != 19 || loaded.Last.Side != 0 || loaded.Ranks[2] != 3 {
 		t.Fatalf("roundtrip failed: %v", err)
 	}
 	backup, err := os.ReadFile(filepath.Join(s.Dir, id+".bak"))

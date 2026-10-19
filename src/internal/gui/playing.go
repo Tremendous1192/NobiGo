@@ -53,7 +53,7 @@ func (g *window) drawActive(screen *ebiten.Image) {
 		g.drawScoring(screen)
 		return
 	}
-	if c.Phase == app.Finished {
+	if c.Phase == app.Finished || c.Phase == app.Summary {
 		g.drawResult(screen)
 		return
 	}
@@ -259,31 +259,18 @@ func (g *window) drawSidebar(screen *ebiten.Image, b *app.Board, turn int) {
 		legend, legendColor = "確定採点の領域  ·  青：黒 / 赤：白", muted
 	}
 	g.label(screen, legend, 680, 172, 16, legendColor)
-	g.plot(screen, image.Rect(700, 230, 1120, 315), turn, false)
-	g.plot(screen, image.Rect(700, 355, 1120, 420), turn, true)
-	eval := "目差 —    勝率 —"
-	if a != nil {
-		score, win := a.ScoreLead, a.Winrate
-		if c.Player == app.White {
-			score = -score
-			win = 1 - win
-		}
-		eval = fmt.Sprintf("目差 %+.1f    勝率 %.1f%%", score, win*100)
+	g.plot(screen, image.Rect(728, 230, 1090, 315), turn)
+	value, note := evaluationText(c, turn, b.Rule)
+	size, valueWidth := g.evaluationRowSize(value, note)
+	g.label(screen, value, 680, 354, size, foreground)
+	if note != "" {
+		g.label(screen, note, 680+valueWidth+8, 359, 12, warning)
 	}
-	g.label(screen, eval, 680, 438, 24, foreground)
-	lossText := "直前の損失：未解析"
-	if loss, ok := c.Loss(turn); ok {
-		lossText = fmt.Sprintf("直前の損失：%.1f目（推定）", loss)
-	}
-	g.label(screen, lossText, 680, 478, 18, muted)
-	caption := "あなた側の予測値"
-	if b.Rule == app.Jungo {
-		caption = "あなた側の予測値（近似）"
-	}
+	caption := "あなた側の予測値 · 損失は直前に打った側"
 	if a != nil && a.Partial {
-		caption += "・時間内の途中結果"
+		caption += " · 途中結果"
 	}
-	g.label(screen, caption, 680, 509, 15, warning)
+	g.label(screen, caption, 680, 392, 14, muted)
 	tabs := []string{"情報", "コメント"}
 	if c.Phase == app.Review {
 		tabs = append(tabs, "アドバイス")
@@ -291,7 +278,7 @@ func (g *window) drawSidebar(screen *ebiten.Image, b *app.Board, turn int) {
 	width := 450 / len(tabs)
 	for i, title := range tabs {
 		x := 680 + i*width
-		g.tabButton(screen, image.Rect(x, 541, x+width-10, 581), title, g.tab == i, func() { g.tab = i })
+		g.tabButton(screen, image.Rect(x, 430, x+width-10, 470), title, g.tab == i, func() { g.tab = i })
 	}
 	body := fmt.Sprintf("%s / コミ %.1f\nCPU強度はこの対局中、固定です。\n棋力 %s · 専用GPU不要", ruleName(b.Rule), app.Komi(b.Rule), app.RankName(c.Profile.Ranks[app.RuleIndex(b.Rule)]))
 	if c.LastCPUTime > 0 {
@@ -311,10 +298,10 @@ func (g *window) drawSidebar(screen *ebiten.Image, b *app.Board, turn int) {
 		body = g.notice
 	}
 	if c.CPUDeadlineMiss && !showAdvice {
-		body = "このPCで5秒を超える応答がありました。\n性能条件は未達です。再試行か中止を選べます。"
+		body = "このPCで7.5秒を超える応答がありました。\n性能条件は未達です。再試行か中止を選べます。"
 	}
 	if showAdvice {
-		g.label(screen, g.wrap(body, 445, 16, 3), 680, 591, 16, foreground)
+		g.label(screen, g.wrap(body, 445, 16, 3), 680, 488, 16, foreground)
 		g.button(screen, image.Rect(965, 674, 1125, 710), "詳しく", true, g.openReviewAdvice)
 		if c.Err != nil {
 			g.label(screen, "解析失敗：盤面の事実を表示", 680, 684, 15, warning)
@@ -322,57 +309,157 @@ func (g *window) drawSidebar(screen *ebiten.Image, b *app.Board, turn int) {
 			g.label(screen, "解析中：盤面の事実を表示", 680, 684, 15, muted)
 		}
 	} else {
-		g.label(screen, g.wrap(body, 445, 16, 5), 680, 591, 16, muted)
+		g.label(screen, g.wrap(body, 445, 16, 5), 680, 488, 16, muted)
 	}
 }
 
-// plot は人側視点の評価を描き、未解析の区間は線を切る。
-func (g *window) plot(screen *ebiten.Image, r image.Rectangle, turn int, winrate bool) {
-	c := g.controller
-	title := "予測目差"
+// evaluationText は欠損をゼロにせず、視点とルールに対応する1行の数値を返す。
+func evaluationText(c *app.Controller, turn int, rule app.Rule) (value, note string) {
+	score, win, loss := "—", "—", "—"
+	if a := c.Evaluations; turn >= 0 && turn < len(a) && a[turn] != nil {
+		s, w := a[turn].ScoreLead, a[turn].Winrate
+		if c.Player == app.White {
+			s, w = -s, 1-w
+		}
+		score, win = fmt.Sprintf("%+.1f", s), fmt.Sprintf("%.1f%%", w*100)
+	}
+	if n, ok := c.Loss(turn); ok {
+		loss = fmt.Sprintf("%.1f目", n)
+	}
+	if rule == app.Jungo {
+		note = "（近似）"
+	}
+	return "目差" + score + "  勝率" + win + "  直前損失" + loss, note
+}
+
+// evaluationRowSize は数値の精度を保ち、注記を含めて1行445pxに収める。
+func (g *window) evaluationRowSize(value, note string) (size, width float64) {
+	available := 445.0
+	if note != "" {
+		g.face.Size = 12
+		noteWidth, _ := text.Measure(note, g.face, 18)
+		available -= noteWidth + 8
+	}
+	g.face.Size = 18
+	width, _ = text.Measure(value, g.face, 27)
+	size = 18
+	if width > available {
+		size *= available / width
+		g.face.Size = size
+		width, _ = text.Measure(value, g.face, size*1.5)
+	}
+	return
+}
+
+type plotPoint struct {
+	x, y  float64
+	valid bool
+}
+
+type plotSegment struct{ from, to plotPoint }
+
+// plotSeries はプレイヤー視点の座標列を返す。欠損位置を残し、左右軸の尺度を混ぜない。
+func plotSeries(values []*engine.Analysis, player app.Color, r image.Rectangle, winrate bool) ([]plotPoint, float64) {
 	bound := 10.0
-	for _, a := range c.Evaluations {
-		if a != nil {
-			bound = math.Max(bound, math.Abs(a.ScoreLead))
+	for _, a := range values {
+		if a != nil && !math.IsNaN(a.ScoreLead) && !math.IsInf(a.ScoreLead, 0) {
+			bound = math.Max(bound, math.Ceil(math.Abs(a.ScoreLead)))
 		}
 	}
-	if winrate {
-		title = "予測勝率"
-	}
-	g.label(screen, title, float64(r.Min.X-20), float64(r.Min.Y-28), 16, muted)
-	vector.StrokeRect(screen, float32(r.Min.X), float32(r.Min.Y), float32(r.Dx()), float32(r.Dy()), 1, tint(surface), false)
-	vector.StrokeLine(screen, float32(r.Min.X), float32(r.Min.Y+r.Dy()/2), float32(r.Max.X), float32(r.Min.Y+r.Dy()/2), 1, tint(surface), false)
-	count := max(1, len(c.Evaluations)-1)
-	previous := false
-	px, py := float32(0), float32(0)
-	for i, a := range c.Evaluations {
+	points := make([]plotPoint, len(values))
+	for i, a := range values {
 		if a == nil {
-			previous = false
 			continue
 		}
 		v := .5 + a.ScoreLead/(2*bound)
 		if winrate {
 			v = a.Winrate
 		}
-		if c.Player == app.White {
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			continue
+		}
+		if player == app.White {
 			v = 1 - v
 		}
-		x := float32(r.Min.X) + float32(i)*float32(r.Dx())/float32(count)
-		y := float32(r.Max.Y) - float32(v)*float32(r.Dy())
-		if previous {
-			vector.StrokeLine(screen, px, py, x, y, 2, tint(accent), true)
+		v = math.Max(0, math.Min(1, v))
+		points[i] = plotPoint{
+			x: float64(r.Min.X) + float64(i*r.Dx())/float64(max(1, len(values)-1)),
+			y: float64(r.Max.Y) - v*float64(r.Dy()), valid: true,
 		}
-		vector.DrawFilledCircle(screen, x, y, 2, tint(accent), true)
-		px, py, previous = x, y, true
 	}
-	x := float32(r.Min.X) + float32(turn)*float32(r.Dx())/float32(count)
+	return points, bound
+}
+
+// plotSegments は欠損で線を切り、破線の周期を着手境界をまたいで維持する。
+func plotSegments(points []plotPoint, dashed bool) []plotSegment {
+	var segments []plotSegment
+	phase := 0.0
+	for i := 1; i < len(points); i++ {
+		a, b := points[i-1], points[i]
+		if !a.valid || !b.valid {
+			phase = 0
+			continue
+		}
+		if !dashed {
+			segments = append(segments, plotSegment{a, b})
+			continue
+		}
+		length := math.Hypot(b.x-a.x, b.y-a.y)
+		// 各着手で破線を再開すると、短い区間が続く長い棋譜では実線に見える。
+		for offset := 0.0; offset < length; {
+			on := phase < 6
+			remaining := 10 - phase
+			if on {
+				remaining = 6 - phase
+			}
+			step := math.Min(remaining, length-offset)
+			if on {
+				from := plotPoint{x: a.x + (b.x-a.x)*offset/length, y: a.y + (b.y-a.y)*offset/length, valid: true}
+				to := plotPoint{x: a.x + (b.x-a.x)*(offset+step)/length, y: a.y + (b.y-a.y)*(offset+step)/length, valid: true}
+				segments = append(segments, plotSegment{from, to})
+			}
+			offset += step
+			phase = math.Mod(phase+step, 10)
+		}
+	}
+	return segments
+}
+
+// plot は目差を左軸の実線、勝率を右軸の破線として同じ85pxの領域に描く。
+func (g *window) plot(screen *ebiten.Image, r image.Rectangle, turn int) {
+	c := g.controller
+	score, bound := plotSeries(c.Evaluations, c.Player, r, false)
+	win, _ := plotSeries(c.Evaluations, c.Player, r, true)
+	const winColor uint32 = 0xc4a7ff
+	g.label(screen, "目差 ━", 680, float64(r.Min.Y-28), 16, accent)
+	g.label(screen, "勝率 ┄", 800, float64(r.Min.Y-28), 16, winColor)
+	vector.StrokeRect(screen, float32(r.Min.X), float32(r.Min.Y), float32(r.Dx()), float32(r.Dy()), 1, tint(surface), false)
+	middle := float64(r.Min.Y) + float64(r.Dy())/2
+	vector.StrokeLine(screen, float32(r.Min.X), float32(middle), float32(r.Max.X), float32(middle), 1, tint(surface), false)
+	for _, series := range []struct {
+		points []plotPoint
+		dashed bool
+		color  uint32
+	}{{score, false, accent}, {win, true, winColor}} {
+		for _, segment := range plotSegments(series.points, series.dashed) {
+			vector.StrokeLine(screen, float32(segment.from.x), float32(segment.from.y), float32(segment.to.x), float32(segment.to.y), 2, tint(series.color), true)
+		}
+		for i, p := range series.points {
+			if p.valid && (i == 0 || !series.points[i-1].valid) && (i == len(series.points)-1 || !series.points[i+1].valid) {
+				vector.DrawFilledCircle(screen, float32(p.x), float32(p.y), 2, tint(series.color), true)
+			}
+		}
+	}
+	count := max(1, len(c.Evaluations)-1)
+	x := float32(r.Min.X) + float32(max(0, min(turn, count)))*float32(r.Dx())/float32(count)
 	vector.StrokeLine(screen, x, float32(r.Min.Y), x, float32(r.Max.Y), 1, tint(warning), false)
-	top, bottom := fmt.Sprintf("+%.0f", bound), fmt.Sprintf("−%.0f", bound)
-	if winrate {
-		top, bottom = "100%", "0%"
+	for i, value := range []string{fmt.Sprintf("+%.0f", bound), "0", fmt.Sprintf("−%.0f", bound)} {
+		y := float64(r.Min.Y) + float64(i*r.Dy())/2 - 9
+		g.label(screen, value, float64(r.Min.X-48), y, 12, accent)
+		g.label(screen, []string{"100%", "50%", "0%"}[i], float64(r.Max.X+8), y, 12, winColor)
 	}
-	g.label(screen, top, float64(r.Max.X-47), float64(r.Min.Y-27), 12, muted)
-	g.label(screen, bottom, float64(r.Max.X-47), float64(r.Max.Y+2), 12, muted)
+	g.label(screen, "0", float64(r.Min.X), float64(r.Max.Y+4), 12, muted)
+	g.label(screen, fmt.Sprintf("%d手", max(0, len(c.Evaluations)-1)), float64(r.Max.X-45), float64(r.Max.Y+4), 12, muted)
 }
 
 // cpuPassed は現在の棋譜の最終手だけを参照し、待ったや次局へ通知を持ち越さない。

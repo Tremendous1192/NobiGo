@@ -2,11 +2,125 @@
 package gui
 
 import (
+	"bytes"
+	"github.com/Tremendous1192/PlayGo/engine"
 	"github.com/Tremendous1192/PlayGo/internal/app"
+	"github.com/hajimehoshi/ebiten/v2/text/v2"
+	"image"
 	"math"
 	"strings"
 	"testing"
 )
+
+// TestEvaluationRowKeepsPerspectiveAndFits は欠損・白視点・直前の着手側・純碁と許容最大値を1行で表示できることを検証する。
+func TestEvaluationRowKeepsPerspectiveAndFits(t *testing.T) {
+	source, err := text.NewGoTextFaceSource(bytes.NewReader(fontData))
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := &window{face: &text.GoTextFace{Source: source}}
+	c, _, _ := adviceFixture(t, app.Jungo, []int{0, 1})
+	value, note := evaluationText(c, 2, app.Jungo)
+	if value != "目差—  勝率—  直前損失—" || note != "（近似）" {
+		t.Fatal("missing values or approximation changed")
+	}
+	c.Player = app.White
+	c.Evaluations[1] = &engine.Analysis{ScoreLead: -20000, Winrate: 0}
+	c.Evaluations[2] = &engine.Analysis{ScoreLead: 20000, Winrate: 1}
+	value, note = evaluationText(c, 2, app.Jungo)
+	if value != "目差-20000.0  勝率0.0%  直前損失40000.0目" {
+		t.Fatalf("wrong perspective or loss: %s", value)
+	}
+	for _, player := range []app.Color{app.Black, app.White} {
+		c.Player = player
+		for _, rule := range []app.Rule{app.Japanese, app.Chinese, app.Jungo} {
+			value, note = evaluationText(c, 2, rule)
+			if (note != "") != (rule == app.Jungo) {
+				t.Fatal("approximation on wrong rule")
+			}
+			size, width := g.evaluationRowSize(value, note)
+			if size < 14 || size > 18 {
+				t.Fatalf("unreadable size=%f", size)
+			}
+			if note != "" {
+				g.face.Size = 12
+				nw, _ := text.Measure(note, g.face, 18)
+				width += 8 + nw
+			}
+			if width > 445.01 || strings.Contains(value, "\n") {
+				t.Fatalf("row overflow: %f", width)
+			}
+		}
+	}
+}
+
+// TestPlotAxesAndPerspective は両軸の上下端・中央と白視点の反転、空の履歴を検証する。
+func TestPlotAxesAndPerspective(t *testing.T) {
+	r := image.Rect(728, 230, 1090, 315)
+	values := []*engine.Analysis{{ScoreLead: -20, Winrate: 0}, {ScoreLead: 0, Winrate: .5}, {ScoreLead: 20, Winrate: 1}}
+	for _, player := range []app.Color{app.Black, app.White} {
+		for _, winrate := range []bool{false, true} {
+			points, bound := plotSeries(values, player, r, winrate)
+			if bound != 20 || len(points) != 3 {
+				t.Fatal("wrong scale")
+			}
+			for i, p := range points {
+				v := float64(i) / 2
+				if player == app.White {
+					v = 1 - v
+				}
+				if !p.valid || p.x != float64(r.Min.X)+float64(i*r.Dx())/2 || p.y != float64(r.Max.Y)-v*85 {
+					t.Fatalf("unexpected point: %+v", p)
+				}
+			}
+		}
+	}
+	points, bound := plotSeries(nil, app.Black, r, false)
+	if len(points) != 0 || bound != 10 || len(plotSegments(points, true)) != 0 {
+		t.Fatal("empty history produced a line")
+	}
+}
+
+// TestPlotMissingValuesBreakBothLines は未解析を補間せず、孤立点も座標として残すことを検証する。
+func TestPlotMissingValuesBreakBothLines(t *testing.T) {
+	values := []*engine.Analysis{{ScoreLead: 4, Winrate: .4}, nil, {ScoreLead: -5, Winrate: .6}}
+	for _, dashed := range []bool{false, true} {
+		points, _ := plotSeries(values, app.Black, image.Rect(0, 0, 100, 85), dashed)
+		if points[1].valid || !points[0].valid || !points[2].valid || len(plotSegments(points, dashed)) != 0 {
+			t.Fatal("missing evaluation was bridged")
+		}
+	}
+}
+
+// TestPlotDashesContinueAcrossDenseMoves は4096手でも実線と破線を区別でき、欠損で周期を再開することを検証する。
+func TestPlotDashesContinueAcrossDenseMoves(t *testing.T) {
+	values := make([]*engine.Analysis, app.MaxMoves+1)
+	for i := range values {
+		values[i] = &engine.Analysis{Winrate: .5}
+	}
+	points, _ := plotSeries(values, app.Black, image.Rect(0, 0, 100, 85), true)
+	for _, dashed := range []bool{false, true} {
+		length := 0.0
+		for _, s := range plotSegments(points, dashed) {
+			length += math.Hypot(s.to.x-s.from.x, s.to.y-s.from.y)
+			if s.from.x < 0 || s.to.x > 100 {
+				t.Fatal("line exceeded bounds")
+			}
+		}
+		want := 100.0
+		if dashed {
+			want = 60
+		}
+		if math.Abs(length-want) > 1e-6 {
+			t.Fatalf("painted length=%f want=%f", length, want)
+		}
+	}
+	points = []plotPoint{{x: 0, valid: true}, {x: 7, valid: true}, {}, {x: 20, valid: true}, {x: 22, valid: true}}
+	segments := plotSegments(points, true)
+	if len(segments) != 2 || segments[1].from.x != 20 || segments[1].to.x != 22 {
+		t.Fatal("gap retained dash phase")
+	}
+}
 
 // TestBoardPoint は全対応路数の四隅・中央と領域外クリックを検証する。
 func TestBoardPoint(t *testing.T) {

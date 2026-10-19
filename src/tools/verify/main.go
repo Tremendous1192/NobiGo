@@ -1,6 +1,6 @@
 // 作成日: 2026-10-18。生成ZIPを新しい一時フォルダーへ展開し、ハッシュ・画面・実CPU着手を確認する。
 
-// Verify はsrcから実行し、配布物の受入測定をcodex/acceptance-v0.3.0.jsonへ記録する。実プレイヤー情報は扱わない。
+// Verify はsrcから実行し、配布物の受入測定をcodex/acceptance-v0.4.0-T21.jsonへ記録する。実プレイヤー情報は扱わない。
 package main
 
 import (
@@ -45,7 +45,7 @@ func run() (result error) {
 		return err
 	}
 	defer func() { result = errors.Join(result, os.RemoveAll(temp)) }()
-	archive := filepath.Join(root, "..", "dist", "PlayGo-v0.3.0-windows-amd64.zip")
+	archive := filepath.Join(root, "..", "dist", "PlayGo-v0.4.0-windows-amd64.zip")
 	want, err := os.ReadFile(archive + ".sha256")
 	if err != nil {
 		return err
@@ -67,20 +67,28 @@ func run() (result error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
 	exe := filepath.Join(appDir, "PlayGo.exe")
-	for _, mode := range []string{"startup", "game", "game-wait", "game-pass", "scoring", "result", "choices", "review", "review-player", "review-19", "review-detail", "review-detail-cpu", "review-detail-combined", "review-detail-wait", "review-detail-error", "review-detail-long", "review-detail-bottom", "review-detail-min"} {
-		cmd := exec.CommandContext(ctx, exe, "-preview", mode, "-screenshot", filepath.Join(work, "package-v0.3.0-"+mode+".png"))
+	for _, mode := range []string{"startup", "game", "game-wait", "game-pass", "scoring", "result", "choices", "review", "review-player", "review-19", "review-detail", "review-detail-cpu", "review-detail-combined", "review-detail-wait", "review-detail-error", "review-detail-long", "review-detail-bottom", "review-detail-min", "game-white-jungo", "game-extremes", "game-gap", "review-detail-before", "review-detail-outside", "review-detail-pass", "review-detail-empty", "review-detail-7", "review-detail-9", "review-detail-11", "review-detail-13", "review-detail-15", "review-detail-19", "review-focus-moved", "review-focus-before", "review-ai", "review-ai-19", "review-detail-ai", "review-detail-ai-risk",
+		"summary-1", "summary-2", "summary-3", "summary-4", "summary-wait", "summary-error", "summary-missing", "summary-white", "summary-jungo", "summary-draw", "summary-empty", "summary-noresult", "summary-long", "summary-bottom", "summary-min", "summary-7", "summary-9", "summary-11", "summary-13", "summary-15", "summary-19"} {
+		cmd := exec.CommandContext(ctx, exe, "-preview", mode, "-screenshot", filepath.Join(work, "package-v0.4.0-"+mode+".png"))
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		if err = cmd.Run(); err != nil {
 			return fmt.Errorf("package screen %s: %w", mode, err)
 		}
 	}
-	cmd := exec.CommandContext(ctx, exe, "-verify", filepath.Join(root, "..", "codex", "acceptance-v0.3.0.json"))
+	cmd := exec.CommandContext(ctx, exe, "-verify", filepath.Join(root, "..", "codex", "acceptance-v0.4.0-T21.json"))
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err = cmd.Run(); err != nil {
 		return fmt.Errorf("package acceptance: %w", err)
 	}
 	if err = verifyContents(appDir); err != nil {
 		return err
+	}
+	finalHash, err := fileHash(archive)
+	if err != nil {
+		return err
+	}
+	if finalHash != hash {
+		return errors.New("source ZIP changed during verification")
 	}
 	fmt.Println("package verification passed; source ZIP and extracted files remained unchanged")
 	return nil

@@ -187,10 +187,36 @@ func (g *window) openResultChoices() {
 		body:  "一局おつかれさまでした。振り返りも、次の一局も、あなたのペースで。",
 		choices: []dialogChoice{
 			{title: "感想戦で振り返る", choose: func() error { g.autoplay = false; return g.setReview(0) }},
+			{title: "感想戦（概要）", choose: g.openSummary},
 			{title: "次のゲームを行う", choose: g.nextGame},
 			{title: "最初の画面に戻る", choose: func() error { g.controller.Abort(); g.notice = ""; return nil }},
 		},
 	}
+}
+
+// openSummary は解析を準備して概要へ移り、通常感想戦の再生を停止する。
+func (g *window) openSummary() error {
+	if err := g.controller.StartSummary(); err != nil {
+		return err
+	}
+	g.autoplay = false
+	g.dialog, g.menu, g.advice = nil, nil, nil
+	g.syncPhase()
+	g.summary = newSummaryDialog(g.finishSummary, func() {
+		if err := g.controller.StartSummary(); err != nil {
+			g.notice = "概要の解析を開始できません。閉じて再度お試しください。"
+		}
+	})
+	return nil
+}
+
+// finishSummary は補完解析を停止し、再保存・演出の再開始なしで行動選択へ戻す。
+func (g *window) finishSummary() {
+	g.autoplay = false
+	g.summary = nil
+	g.controller.EndSummary()
+	g.syncPhase()
+	g.openResultChoices()
 }
 
 // finishReview は補完解析と再生を停止して行動選択へ戻る。採点演出と結果保存は繰り返さない。

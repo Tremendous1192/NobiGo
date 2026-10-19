@@ -49,6 +49,106 @@ func TestOwnershipTimingTracksCurrentBoard(t *testing.T) {
 	}
 }
 
+// TestSummaryAcceptanceCoverage は実測対象に全3ルール・7路と19路の概要と次局が含まれることを検証する。
+func TestSummaryAcceptanceCoverage(t *testing.T) {
+	v := newVerification("unused.json")
+	if len(v.SummaryCases) != 6 || len(v.Cases) != 96 {
+		t.Fatal("acceptance coverage changed")
+	}
+	for i, item := range v.SummaryCases {
+		if item.Rule != []app.Rule{app.Japanese, app.Chinese, app.Jungo}[i/2] || item.Size != []int{7, 19}[i%2] {
+			t.Fatal("wrong summary condition")
+		}
+	}
+}
+
+// TestDisplayPreviewBoundaries は二軸・純碁・欠損と部分図の全路数・前後・図外・パス・初期局面を検証する。
+func TestDisplayPreviewBoundaries(t *testing.T) {
+	for _, mode := range []string{"game-white-jungo", "game-extremes", "game-gap", "review-focus-moved", "review-focus-before", "review-detail-before", "review-detail-outside", "review-detail-pass", "review-detail-empty",
+		"review-detail-7", "review-detail-9", "review-detail-11", "review-detail-13", "review-detail-15", "review-detail-19"} {
+		t.Run(mode, func(t *testing.T) {
+			g := &window{previewMode: true}
+			if err := g.preparePreview(mode); err != nil {
+				t.Fatal(err)
+			}
+			if g.store != nil || g.engine != nil || g.autoplay {
+				t.Fatal("preview accessed real resources")
+			}
+			if strings.HasPrefix(mode, "review-focus") {
+				if g.advice != nil || g.currentReviewFocus() == nil || g.reviewFocus.showBefore != (mode == "review-focus-before") {
+					t.Fatal("closed detail lost focus or stage")
+				}
+				if mode == "review-focus-moved" && g.reviewFocus.center == g.reviewFocus.point {
+					t.Fatal("moved focus was reset")
+				}
+				return
+			}
+			if strings.HasPrefix(mode, "review-detail") {
+				if g.advice == nil || g.advice.diagram == nil {
+					t.Fatal("missing diagram")
+				}
+				d := g.advice.diagram
+				if mode == "review-detail-before" && (!d.showBefore || d.targets[d.target].label != "取られた連") {
+					t.Fatal("wrong before target")
+				}
+				if mode == "review-detail-outside" {
+					s, l := d.outsideCounts()
+					if s != 14 || l != 14 {
+						t.Fatalf("wrong outside example: %d/%d", s, l)
+					}
+				}
+				if (mode == "review-detail-pass" || mode == "review-detail-empty") && len(d.targets) != 0 {
+					t.Fatal("invented focus")
+				}
+				return
+			}
+			c := g.controller
+			if c.Phase != app.Playing || c.Board.Passes >= 2 {
+				t.Fatal("game fixture ended")
+			}
+			if mode == "game-white-jungo" && (c.Player != app.White || c.Board.Rule != app.Jungo) {
+				t.Fatal("wrong perspective or rule")
+			}
+			if mode == "game-extremes" {
+				if loss, ok := c.Loss(len(c.Board.Moves)); !ok || loss != 40000 {
+					t.Fatal("extreme loss missing")
+				}
+			}
+			if mode == "game-gap" && (c.Evaluations[7] == nil || c.Evaluations[8] != nil || c.Evaluations[12] != nil || c.Evaluations[13] == nil) {
+				t.Fatal("gap fixture missing")
+			}
+		})
+	}
+}
+
+// TestAIPreviewEvidence は合成例の接続評価・全路盤・エンジン分離を検証する。
+func TestAIPreviewEvidence(t *testing.T) {
+	for _, mode := range []string{"review-ai", "review-ai-19", "review-detail-ai", "review-detail-ai-risk"} {
+		g := &window{previewMode: true}
+		if err := g.preparePreview(mode); err != nil {
+			t.Fatal(err)
+		}
+		d := g.currentReviewFocus()
+		g.refreshTactics(&d.after, g.reviewTurn)
+		if g.engine != nil || g.store != nil || d.after.read.variations == 0 {
+			t.Fatal("preview has no isolated reading")
+		}
+		found := false
+		want := readStrong
+		if mode == "review-detail-ai-risk" {
+			want = readRisk
+		}
+		for _, link := range d.after.read.links {
+			if link.strength == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("%s has no expected connection", mode)
+		}
+	}
+}
+
 // TestAdvicePreviewScenarios は表示用局面の手番・複合効果・未解析・長文・最小サイズが再現できることを検証する。
 func TestAdvicePreviewScenarios(t *testing.T) {
 	for _, mode := range []string{"review-detail", "review-detail-cpu", "review-detail-combined", "review-detail-wait", "review-detail-error", "review-detail-long", "review-detail-bottom", "review-detail-min"} {

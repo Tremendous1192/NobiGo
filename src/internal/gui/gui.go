@@ -61,7 +61,9 @@ type window struct {
 	reviewTurn          int
 	reviewBoard         *app.Board
 	reviewBefore        *app.Board
+	reviewFocus         *reviewDiagram
 	advice              *adviceDialog
+	summary             *summaryDialog
 	adviceCanvas        *ebiten.Image
 	autoplay            bool
 	nextReplay          time.Time
@@ -126,7 +128,7 @@ func Run(options Options) (result error) {
 		}
 		result = errors.Join(result, g.engine.Close())
 	}()
-	ebiten.SetWindowTitle("PlayGo(v0.3.0)")
+	ebiten.SetWindowTitle("PlayGo(v0.4.0)")
 	ebiten.SetWindowSize(1180, 800)
 	if g.previewMinimum {
 		ebiten.SetWindowSize(885, 600)
@@ -196,6 +198,9 @@ func (g *window) Update() error {
 	if g.advice != nil {
 		g.updateAdviceInput()
 	}
+	if g.summary != nil {
+		g.updateSummaryInput(g.summary)
+	}
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		x, y := ebiten.CursorPosition()
 		for i := len(g.actions) - 1; i >= 0; i-- {
@@ -232,6 +237,9 @@ func (g *window) Draw(screen *ebiten.Image) {
 	if g.advice != nil {
 		g.drawAdviceDialog(screen)
 	}
+	if g.summary != nil {
+		g.drawSummaryDialog(screen, g.summary)
+	}
 	if g.previewMode {
 		g.label(screen, "画面確認用の合成例・架空の評価値", 830, 7, 12, warning)
 	}
@@ -266,6 +274,10 @@ func (g *window) syncPhase() {
 	}
 	phase := g.controller.Phase
 	g.advice = nil
+	g.reviewFocus = nil
+	if phase != app.Summary {
+		g.summary = nil
+	}
 	switch phase {
 	case app.Playing:
 		if g.shownPhase != app.Scoring {
@@ -277,10 +289,12 @@ func (g *window) syncPhase() {
 		g.resultPromptPending = false
 	case app.Review:
 		g.tab = 2
+	case app.Summary:
+		g.autoplay = false
 	case app.Scoring:
 		g.prepareScore()
 	case app.Finished:
-		if g.shownPhase != app.Review {
+		if g.shownPhase != app.Review && g.shownPhase != app.Summary {
 			g.animationStart = time.Now()
 			g.resultPromptPending = true
 		}

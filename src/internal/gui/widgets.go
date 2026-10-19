@@ -111,8 +111,23 @@ func (g *window) wrapLines(value string, width, size float64) []string {
 			runes := []rune(next)
 			split := len(runes) - 1
 			// 句読点だけの行や行末の開き括弧は、拡大した説明文を読みにくくする。
-			for split > 1 && (strings.ContainsRune("、。，．！？!?)]}）」』】〉》", runes[split]) || strings.ContainsRune("([{（「『【〈《", runes[split-1])) {
-				split--
+			for split > 1 {
+				if strings.ContainsRune("、。，．！？!?)]}）」』】〉》", runes[split]) || strings.ContainsRune("([{（「『【〈《", runes[split-1]) {
+					split--
+					continue
+				}
+				// 狭い詳細欄でもCPUやA19などの短い英数字を途中で分けない。
+				if wrapTokenRune(runes[split]) && wrapTokenRune(runes[split-1]) {
+					start := split - 1
+					for start > 0 && wrapTokenRune(runes[start-1]) {
+						start--
+					}
+					if start > 0 {
+						split = start
+						continue
+					}
+				}
+				break
 			}
 			lines = append(lines, string(runes[:split]))
 			line = string(runes[split:])
@@ -122,6 +137,11 @@ func (g *window) wrapLines(value string, width, size float64) []string {
 	}
 	lines = append(lines, line)
 	return lines
+}
+
+// wrapTokenRune は座標やCPUの表記を構成する半角英数字を判定する。
+func wrapTokenRune(r rune) bool {
+	return r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9'
 }
 
 // button は有効なボタンだけをクリック対象へ登録する。
@@ -170,7 +190,16 @@ func (g *window) combo(screen *ebiten.Image, r image.Rectangle, title string, op
 }
 
 // dismiss は入力フォーカスとモーダルを解除する。
-func (g *window) dismiss() { g.field.Blur(); g.dialog = nil; g.menu = nil; g.advice = nil }
+func (g *window) dismiss() {
+	if g.summary != nil {
+		g.finishSummary()
+		return
+	}
+	g.field.Blur()
+	g.dialog = nil
+	g.menu = nil
+	g.advice = nil
+}
 
 // overlay は背面操作を取り除く。
 func (g *window) overlay(screen *ebiten.Image) {
@@ -246,18 +275,21 @@ func (g *window) chooseDialog(index int) {
 		d.problem = "移動できませんでした。保存先を確認して再試行してください。"
 		return
 	}
-	g.dismiss()
+	// 遷移先で新しいダイアログを開く操作もあるため、選択元だけを閉じる。
+	if g.dialog == d {
+		g.dialog = nil
+	}
 }
 
-// drawChoiceDialog は終了後の3つの行動を背面操作から分離して表示する。
+// drawChoiceDialog は終了後の4つの行動を背面操作から分離して表示する。
 func (g *window) drawChoiceDialog(screen *ebiten.Image, d *dialog) {
-	rect(screen, image.Rect(325, 170, 855, 650), panel)
+	rect(screen, image.Rect(325, 140, 855, 700), panel)
 	g.label(screen, d.title, 350, 196, 27, foreground)
 	g.label(screen, g.wrap(d.body, 475, 18, 2), 350, 249, 18, muted)
 	for i, choice := range d.choices {
 		y := 330 + i*68
 		g.button(screen, image.Rect(350, y, 830, y+54), choice.title, true, func() { g.chooseDialog(i) })
 	}
-	g.label(screen, g.wrap(d.problem, 475, 15, 2), 350, 529, 15, warning)
-	g.button(screen, image.Rect(685, 589, 830, 629), "閉じる", true, g.dismiss)
+	g.label(screen, g.wrap(d.problem, 475, 15, 2), 350, 600, 15, warning)
+	g.button(screen, image.Rect(685, 649, 830, 689), "閉じる", true, g.dismiss)
 }

@@ -59,6 +59,11 @@ func helperEngine(mode string) error {
 			return nil
 		}
 		r := wireResponse{ID: q.ID, Root: &moveInfo{Winrate: .6, ScoreLead: 2}, Moves: []moveInfo{{Move: "D4", Visits: 5, Winrate: .6, ScoreLead: 2, Prior: .1}}, Ownership: make([]float64, q.SizeX*q.SizeY), Policy: make([]float64, q.SizeX*q.SizeY+1)}
+		if q.MovesOwnership && mode != "missing-review" {
+			r.Moves[0].Ownership = make([]float64, q.SizeX*q.SizeY)
+			r.Moves[0].PV = []string{"D4", "pass"}
+			r.Moves[0].PVVisits = []int{5, 2}
+		}
 		if mode == "short" {
 			r.Ownership = nil
 		}
@@ -213,6 +218,50 @@ func TestMalformedAndMissingOutput(t *testing.T) {
 			c := fakeClient(t, mode)
 			if _, err := c.Analyze(context.Background(), testPosition()); err == nil {
 				t.Fatal("invalid response accepted")
+			}
+		})
+	}
+}
+
+// TestReviewProtocol は感想戦だけの追加要求・読み筋・欠損拒否を検証する。
+func TestReviewProtocol(t *testing.T) {
+	p := testPosition()
+	q, err := makeRequest(p, "normal")
+	if err != nil || q.MovesOwnership || q.PVVisits || q.Override != nil {
+		t.Fatal("game requested review data")
+	}
+	p.Review = true
+	q, err = makeRequest(p, "review")
+	if err != nil || !q.MovesOwnership || !q.PVVisits || q.PVLength != 15 || q.Override == nil || q.Override.MaxTime != 4.5 {
+		t.Fatal("review options missing")
+	}
+	a, err := fakeClient(t, "normal").Analyze(context.Background(), p)
+	if err != nil || !a.LocalRead || len(a.Moves[0].PV) != 2 || a.Moves[0].PV[1] != -1 || len(a.Moves[0].Ownership) != 81 {
+		t.Fatalf("review: %+v %v", a, err)
+	}
+	if _, err = fakeClient(t, "missing-review").Analyze(context.Background(), p); err == nil {
+		t.Fatal("missing review accepted")
+	}
+}
+
+// TestVariationValidation は不正な座標・起点・配列長・数値を受理しないことを検証する。
+func TestVariationValidation(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		move moveInfo
+	}{
+		{"coordinate", moveInfo{Move: "A1", PV: []string{"I1"}}},
+		{"origin", moveInfo{Move: "A1", PV: []string{"B1"}}},
+		{"length", moveInfo{Move: "A1", PV: make([]string, 65)}},
+		{"visits-length", moveInfo{Move: "A1", PV: []string{"A1"}, PVVisits: []int{1, 2}}},
+		{"visits-negative", moveInfo{Move: "A1", PV: []string{"A1"}, PVVisits: []int{-1}}},
+		{"ownership-length", moveInfo{Move: "A1", Ownership: []float64{1}}},
+		{"ownership-range", moveInfo{Move: "A1", Ownership: append([]float64{2}, make([]float64, 80)...)}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := wireResponse{Root: &moveInfo{Winrate: .5}, Moves: []moveInfo{tc.move}, Ownership: make([]float64, 81), Policy: make([]float64, 82)}
+			if _, err := decodeAnalysis(r, 9); err == nil {
+				t.Fatal("invalid variation accepted")
 			}
 		})
 	}

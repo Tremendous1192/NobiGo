@@ -29,10 +29,11 @@ type Ply struct {
 	Point int
 }
 type Position struct {
-	Size  int
-	Rules string
-	Komi  float64
-	Moves []Ply
+	Size   int
+	Rules  string
+	Komi   float64
+	Moves  []Ply
+	Review bool // 感想戦だけで候補別の所有予測と読み筋を要求する。
 }
 type Candidate struct {
 	Point     int
@@ -40,6 +41,9 @@ type Candidate struct {
 	Winrate   float64
 	ScoreLead float64
 	Prior     float64
+	PV        []int
+	PVVisits  []int
+	Ownership []float64
 }
 
 // Analysis は黒視点の評価。配列の所有権は呼出し元へ移る。
@@ -50,27 +54,39 @@ type Analysis struct {
 	Policy    []float64
 	Moves     []Candidate
 	Partial   bool
+	LocalRead bool // 感想戦用の追加フィールドを検査済み。
 }
+type reviewSettings struct {
+	MaxTime float64 `json:"maxTime"`
+}
+
 type request struct {
-	ID          string      `json:"id"`
-	Action      string      `json:"action,omitempty"`
-	TerminateID string      `json:"terminateId,omitempty"`
-	Rules       string      `json:"rules,omitempty"`
-	Komi        float64     `json:"komi"`
-	SizeX       int         `json:"boardXSize,omitempty"`
-	SizeY       int         `json:"boardYSize,omitempty"`
-	Moves       [][2]string `json:"moves"`
-	Visits      int         `json:"maxVisits,omitempty"`
-	Ownership   bool        `json:"includeOwnership,omitempty"`
-	Policy      bool        `json:"includePolicy,omitempty"`
-	Interval    float64     `json:"reportDuringSearchEvery,omitempty"`
+	ID             string          `json:"id"`
+	Action         string          `json:"action,omitempty"`
+	TerminateID    string          `json:"terminateId,omitempty"`
+	Rules          string          `json:"rules,omitempty"`
+	Komi           float64         `json:"komi"`
+	SizeX          int             `json:"boardXSize,omitempty"`
+	SizeY          int             `json:"boardYSize,omitempty"`
+	Moves          [][2]string     `json:"moves"`
+	Visits         int             `json:"maxVisits,omitempty"`
+	Ownership      bool            `json:"includeOwnership,omitempty"`
+	Policy         bool            `json:"includePolicy,omitempty"`
+	Interval       float64         `json:"reportDuringSearchEvery,omitempty"`
+	MovesOwnership bool            `json:"includeMovesOwnership,omitempty"`
+	PVVisits       bool            `json:"includePVVisits,omitempty"`
+	PVLength       int             `json:"analysisPVLen,omitempty"`
+	Override       *reviewSettings `json:"overrideSettings,omitempty"`
 }
 type moveInfo struct {
-	Move      string  `json:"move"`
-	Visits    int     `json:"visits"`
-	Winrate   float64 `json:"winrate"`
-	ScoreLead float64 `json:"scoreLead"`
-	Prior     float64 `json:"prior"`
+	Move      string    `json:"move"`
+	Visits    int       `json:"visits"`
+	Winrate   float64   `json:"winrate"`
+	ScoreLead float64   `json:"scoreLead"`
+	Prior     float64   `json:"prior"`
+	PV        []string  `json:"pv"`
+	PVVisits  []int     `json:"pvVisits"`
+	Ownership []float64 `json:"ownership"`
 }
 type wireResponse struct {
 	ID        string            `json:"id"`
@@ -320,6 +336,10 @@ func makeRequest(p Position, id string) (request, error) {
 	if p.Size < 7 || p.Size > 19 || p.Size%2 == 0 || len(p.Moves) > 4096 || !finite(p.Komi, -100, 100) || (p.Rules != "japanese" && p.Rules != "chinese" && p.Rules != "stone-scoring") {
 		return q, errors.New("invalid engine position")
 	}
+	if p.Review {
+		q.MovesOwnership, q.PVVisits, q.PVLength = true, true, 15
+		q.Override = &reviewSettings{MaxTime: 4.5}
+	}
 	for i, m := range p.Moves {
 		expected := "B"
 		if i%2 == 1 {
@@ -374,7 +394,31 @@ func decodeAnalysis(r wireResponse, size int) (Analysis, error) {
 		if m.Visits < 0 || !finite(m.Winrate, 0, 1) || !finite(m.ScoreLead, -20000, 20000) || !finite(m.Prior, 0, 1) {
 			return a, errors.New("invalid move evaluation")
 		}
-		a.Moves = append(a.Moves, Candidate{point, m.Visits, m.Winrate, m.ScoreLead, m.Prior})
+		candidate := Candidate{Point: point, Visits: m.Visits, Winrate: m.Winrate, ScoreLead: m.ScoreLead, Prior: m.Prior, PVVisits: m.PVVisits, Ownership: m.Ownership}
+		if len(m.PV) > 64 || len(m.PVVisits) > 0 && len(m.PVVisits) != len(m.PV) || len(m.Ownership) > 0 && len(m.Ownership) != size*size {
+			return a, errors.New("invalid variation dimensions")
+		}
+		for _, vertex := range m.PV {
+			point, err := Point(vertex, size)
+			if err != nil {
+				return a, err
+			}
+			candidate.PV = append(candidate.PV, point)
+		}
+		if len(candidate.PV) > 0 && candidate.PV[0] != candidate.Point {
+			return a, errors.New("variation does not start with candidate")
+		}
+		for _, visits := range m.PVVisits {
+			if visits < 0 {
+				return a, errors.New("invalid variation visits")
+			}
+		}
+		for _, ownership := range m.Ownership {
+			if !finite(ownership, -1, 1) {
+				return a, errors.New("invalid move ownership")
+			}
+		}
+		a.Moves = append(a.Moves, candidate)
 	}
 	return a, nil
 }
@@ -415,7 +459,7 @@ func (c *Client) Analyze(ctx context.Context, p Position) (Analysis, error) {
 // AnalyzeProgress は有効な途中解析を同じgoroutineで通知する。notifyはnil可、待機や配列の変更は禁止。
 // 通知後も探索を続け、戻り値だけを着手確定に使う。通知配列は以後変更せず、読取り専用として転送できる。
 func (c *Client) AnalyzeProgress(ctx context.Context, p Position, notify func(Analysis)) (Analysis, error) {
-	ctx, cancel := context.WithTimeout(ctx, 3500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(ctx, 5500*time.Millisecond)
 	defer cancel()
 	select {
 	case <-c.slot:
@@ -452,6 +496,14 @@ func (c *Client) AnalyzeProgress(ctx context.Context, p Position, notify func(An
 			a, err := decodeAnalysis(r, p.Size)
 			if err != nil {
 				return Analysis{}, err
+			}
+			if p.Review {
+				for _, m := range a.Moves {
+					if len(m.Ownership) != p.Size*p.Size || len(m.PVVisits) != len(m.PV) {
+						return Analysis{}, errors.New("incomplete review variation")
+					}
+				}
+				a.LocalRead = true
 			}
 			if !r.During {
 				return a, nil

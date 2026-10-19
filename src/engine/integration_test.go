@@ -14,7 +14,7 @@ func TestRealEngine(t *testing.T) {
 	if root == "" {
 		t.Skip("set PLAYGO_ENGINE_ROOT to opt into local engine checks")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	c, err := Start(ctx, root)
 	if err != nil {
@@ -34,6 +34,12 @@ func TestRealEngine(t *testing.T) {
 		if len(a.Ownership) != 49 || len(a.Policy) != 50 || len(a.Moves) == 0 {
 			t.Fatal("incomplete analysis")
 		}
-		t.Logf("%s %dms partial=%v", rule, time.Since(started).Milliseconds(), a.Partial)
+		normalMS := time.Since(started).Milliseconds()
+		started = time.Now()
+		review, err := c.Analyze(ctx, Position{Size: 7, Rules: rule, Komi: 0, Review: true})
+		if err != nil || !review.LocalRead || len(review.Moves) == 0 || len(review.Moves[0].PV) == 0 || len(review.Moves[0].Ownership) != 49 {
+			t.Fatalf("review data missing: %v", err)
+		}
+		t.Logf("%s normal=%dms review=%dms partial=%v", rule, normalMS, time.Since(started).Milliseconds(), a.Partial)
 	}
 }

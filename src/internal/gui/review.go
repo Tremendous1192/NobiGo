@@ -35,6 +35,7 @@ func (g *window) setReview(turn int) error {
 	g.reviewBefore = before
 	g.reviewTurn = turn
 	g.advice = nil
+	g.reviewFocus = nil
 	g.notice = ""
 	g.nextReplay = time.Now().Add(1200 * time.Millisecond)
 	return nil
@@ -83,6 +84,7 @@ func (g *window) drawReview(screen *ebiten.Image) {
 	}
 	g.drawBoard(screen, b, a, nil, nil, false)
 	g.drawSidebar(screen, b, g.reviewTurn)
+	g.drawReviewFocus(screen)
 	g.button(screen, image.Rect(35, 741, 215, 788), "一手戻る", g.reviewTurn > 0, func() { g.autoplay = false; _ = g.setReview(g.reviewTurn - 1) })
 	playLabel := "自動再生"
 	if g.autoplay {
@@ -106,18 +108,19 @@ func (g *window) drawReview(screen *ebiten.Image) {
 
 type adviceText struct {
 	summary, detail string
+	focus           []focusTarget
 }
 
 // reviewAdvice は表示局面の事実・推定・学びを要点と詳細へ分ける。外部通信や盤面の変更は行わない。
 func reviewAdvice(c *app.Controller, turn int, before, after *app.Board) adviceText {
 	if c == nil || c.Board == nil || turn < 0 || turn > len(c.Board.Moves) {
-		return adviceText{"局面を準備しています。", "局面を準備しています。"}
+		return adviceText{summary: "局面を準備しています。", detail: "局面を準備しています。"}
 	}
 	if turn == 0 {
-		return adviceText{"最初の局面です。隅や辺に注目しましょう。", "まだ石を置いていない局面です。\n隅や辺では盤の端も囲いに使えるため、中央より少ない石で地を囲めます。\n最初の数手は、隅や辺に打った石がどうつながるかを見てみましょう。"}
+		return adviceText{summary: "最初の局面です。隅や辺に注目しましょう。", detail: "まだ石を置いていない局面です。\n隅や辺では盤の端も囲いに使えるため、中央より少ない石で地を囲めます。\n最初の数手は、隅や辺に打った石がどうつながるかを見てみましょう。"}
 	}
 	if before == nil || after == nil {
-		return adviceText{"局面を準備しています。", "局面を準備しています。"}
+		return adviceText{summary: "局面を準備しています。", detail: "局面を準備しています。"}
 	}
 	move := c.Board.Moves[turn-1]
 	playerMove := move.Color == c.Player
@@ -129,7 +132,6 @@ func reviewAdvice(c *app.Controller, turn int, before, after *app.Board) adviceT
 	if !playerMove {
 		actor, other, title = "CPU", "あなた", "CPUの狙い（推定）"
 	}
-	effect, _ := moveLesson(before, after, move)
 	vertex := adviceVertex(move.Point, after.Size)
 	changes := describeMoveChanges(facts, after.Size, actor, other)
 	detail := []string{
@@ -148,16 +150,41 @@ func reviewAdvice(c *app.Controller, turn int, before, after *app.Board) adviceT
 			detail = append(detail, "比較候補："+adviceVertex(a.Moves[0].Point, before.Size)+qualifier+"も着手前の盤面で見直し、取れる石や、打った後の呼吸点を比べてみましょう。")
 		}
 	}
-	summary := actor + "の手：" + effect
+	summary := summarizeMove(facts, vertex, actor, playerMove, after.Size)
+	return adviceText{summary: summary, detail: title + "\n" + strings.Join(detail, "\n"), focus: moveFocusTargets(before, after, move, facts)}
+}
+
+// summarizeMove は危険・主な効果・確認事項を短い3行へ分け、詳細の省略で危険が隠れないようにする。
+func summarizeMove(facts moveFacts, vertex, actor string, playerMove bool, size int) string {
+	first := fmt.Sprintf("%sの手：%s、呼吸点%d。", actor, vertex, len(facts.liberties))
 	if len(facts.liberties) == 1 {
-		summary = actor + "の手：着手した連はアタリです。"
-		if facts.taken > 0 {
-			summary += fmt.Sprintf("相手の石を%d個取りましたが、注意が必要です。", facts.taken)
-		} else if len(facts.attacked) > 0 {
-			summary += "相手の連もアタリになっています。"
+		first = actor + "の手：アタリ。呼吸点は" + adviceVertex(facts.liberties[0], size) + "だけ。"
+	}
+	var effects []string
+	if facts.taken > 0 {
+		effects = append(effects, fmt.Sprintf("取り%d個", facts.taken))
+	}
+	if len(facts.attacked) > 0 {
+		effects = append(effects, "相手アタリ")
+	}
+	if len(facts.rescued) > 0 {
+		effects = append(effects, "救出")
+	}
+	if facts.connected >= 2 {
+		effects = append(effects, "連結")
+	}
+	second := strings.Join(effects, "・")
+	if second == "" {
+		second = "周囲の石とのつながりに注目。"
+		if facts.connected == 1 {
+			second = "自分の石から伸びました。"
 		}
 	}
-	return adviceText{summary, title + "\n" + strings.Join(detail, "\n")}
+	third := "次局は打った後の呼吸点も確認。"
+	if !playerMove {
+		third = "自分の連とCPUの呼吸点を確認。"
+	}
+	return strings.Join([]string{first, second, third}, "\n")
 }
 
 // adviceVertex は検証済みの盤上点を盤面表示と同じ座標へ変換する。
@@ -272,7 +299,7 @@ func passAdvice(after *app.Board, playerMove bool) adviceText {
 	if !playerMove {
 		action = "CPUは終局を目指した可能性がありますが、意図は断定せず、あなた自身の打ち残しも確認しましょう。"
 	}
-	return adviceText{summary, strings.Join([]string{summary + "盤上の石の配置は変わりません。", ending, rule, action}, "\n")}
+	return adviceText{summary: summary, detail: strings.Join([]string{summary + "盤上の石の配置は変わりません。", ending, rule, action}, "\n")}
 }
 
 type changedGroup struct {

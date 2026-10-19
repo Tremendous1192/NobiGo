@@ -12,6 +12,9 @@ import (
 	"github.com/Tremendous1192/PlayGo/engine"
 )
 
+// CPUResponseLimit は操作確定からCPU着手の描画完了までの受入上限。
+const CPUResponseLimit = 7500 * time.Millisecond
+
 type Phase uint8
 
 const (
@@ -20,6 +23,7 @@ const (
 	Scoring
 	Finished
 	Review
+	Summary
 )
 
 // Analyzer の実装はcontext取消で速やかに戻る。Controllerは同時に一度だけ呼び出す。
@@ -59,21 +63,23 @@ type Controller struct {
 	UndoCount       int
 	LastCPUTime     time.Duration
 	CPUDeadlineMiss bool
+	SummarySession  *SummarySession
 
-	store        *Store
-	rng          *rand.Rand
-	gameID       string
-	jobs         chan analysisJob
-	results      chan analysisResult
-	progress     chan analysisResult
-	stop         context.CancelFunc
-	done         chan struct{}
-	cancel       context.CancelFunc
-	generation   uint64
-	cpubegan     time.Time
-	cpuPresented int
-	reviewTurn   int
-	failedTurn   int
+	store           *Store
+	rng             *rand.Rand
+	gameID          string
+	jobs            chan analysisJob
+	results         chan analysisResult
+	progress        chan analysisResult
+	stop            context.CancelFunc
+	done            chan struct{}
+	cancel          context.CancelFunc
+	generation      uint64
+	cpubegan        time.Time
+	cpuPresented    int
+	reviewTurn      int
+	failedTurn      int
+	reviewRequested map[int]bool // 表示中の前後2局面だけを再解析し、失敗・未対応時の自動再送を防ぐ。
 }
 
 // NewController は1つの解析作業を開始する。呼出し元はCloseして終了を待つ。
@@ -155,7 +161,7 @@ func (c *Controller) invalidate() {
 // Close は解析を取り消して唯一の作業の終了を待つ。UI所有者が最後に呼ぶ。
 func (c *Controller) Close() { c.invalidate(); c.stop(); <-c.done }
 
-// request は待ち時間も含む4秒の期限を設定する。残り1秒を着手選択・描画に確保する。
+// request は待ち時間も含む6秒の期限を設定する。残り1.5秒を取消・着手選択・描画に確保する。
 func (c *Controller) request() {
 	c.requestPosition(c.Board, len(c.Board.Moves))
 }
@@ -163,11 +169,17 @@ func (c *Controller) request() {
 // requestPosition は指定した再生局面の解析も、対局と同じ有限キューへ送る。
 func (c *Controller) requestPosition(b *Board, turn int) {
 	c.invalidate()
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	limit := 6 * time.Second
+	if c.Phase == Summary && c.SummarySession != nil {
+		limit = min(limit, time.Until(c.SummarySession.deadline))
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), limit)
 	c.cancel = cancel
 	c.Busy = true
 	c.Err = nil
-	c.jobs <- analysisJob{ctx, c.generation, turn, EnginePosition(b)}
+	position := EnginePosition(b)
+	position.Review = c.Phase == Review
+	c.jobs <- analysisJob{ctx, c.generation, turn, position}
 }
 
 // Start は設定保存の成功後に新規対局を開始し、強度を固定する。
@@ -203,6 +215,7 @@ func (c *Controller) Start(p Profile, s Settings) error {
 	c.Evaluations = make([]*engine.Analysis, 1)
 	c.UndoCount = 0
 	c.Score = Score{}
+	c.SummarySession = nil
 	c.Phase = Playing
 	c.LastCPUTime = 0
 	c.CPUDeadlineMiss = false
@@ -247,11 +260,14 @@ func (c *Controller) endPosition() bool {
 // matchesAnalysis は現在の対局または再生要求に属する結果だけを受理する。
 func (c *Controller) matchesAnalysis(r analysisResult) bool {
 	return r.id == c.generation && c.Board != nil && r.turn >= 0 && r.turn < len(c.Evaluations) &&
-		(c.Phase == Review || c.Phase == Playing && r.turn == len(c.Board.Moves))
+		(c.Phase == Review || c.Phase == Summary || c.Phase == Playing && r.turn == len(c.Board.Moves))
 }
 
 // Poll は確定応答を優先し、なければ途中評価だけを更新する。途中通知では着手せずBusyも解除しない。
 func (c *Controller) Poll() {
+	if c.expireSummary(time.Now()) {
+		return
+	}
 	select {
 	case r := <-c.results:
 		if !c.matchesAnalysis(r) {
@@ -263,11 +279,20 @@ func (c *Controller) Poll() {
 			c.cancel = nil
 		}
 		if r.err != nil {
+			if c.Phase == Summary {
+				c.finishSummary(r.err)
+				return
+			}
 			c.Err = r.err
 			c.failedTurn = r.turn
 			return
 		}
 		c.Evaluations[r.turn] = &r.analysis
+		if c.Phase == Summary {
+			c.SummarySession.Completed++
+			c.requestSummaryAnalysis()
+			return
+		}
 		if c.Phase == Review {
 			c.requestReviewAnalysis()
 			return
@@ -300,7 +325,7 @@ func (c *Controller) Poll() {
 	}
 }
 
-// Retry は現在局面の解析を再試行する。CPU手番なら5秒の計測も開始し直す。
+// Retry は現在局面の解析を再試行する。CPU手番なら7.5秒の計測も開始し直す。
 func (c *Controller) Retry() {
 	if c.Board == nil || c.Phase != Playing {
 		return
@@ -346,7 +371,7 @@ func (c *Controller) Loss(turn int) (float64, bool) {
 
 // Complete は確定採点を1回だけ保存する。失敗時には採点状態を維持して再試行できる。
 func (c *Controller) Complete(dead, seki map[int]bool) error {
-	if c.Phase == Finished || c.Phase == Review {
+	if c.Phase == Finished || c.Phase == Review || c.Phase == Summary {
 		return nil
 	}
 	if c.Phase != Scoring {
@@ -407,15 +432,33 @@ func (c *Controller) ReviewAt(turn int) (*Board, error) {
 	c.invalidate()
 	c.Phase = Review
 	c.Err = nil
+	c.releaseReviewRead(turn)
 	c.reviewTurn = turn
+	c.reviewRequested = make(map[int]bool, 2)
 	c.requestReviewAnalysis()
 	return b, nil
+}
+
+// releaseReviewRead は候補別の大きな予測配列を表示前後の2局面に限定し、履歴の目差・勝率は残す。
+func (c *Controller) releaseReviewRead(turn int) {
+	for i, a := range c.Evaluations {
+		if a == nil || !a.LocalRead || i == turn || i == turn-1 {
+			continue
+		}
+		copy := *a
+		copy.LocalRead = false
+		copy.Moves = slices.Clone(a.Moves)
+		for j := range copy.Moves {
+			copy.Moves[j].PV, copy.Moves[j].PVVisits, copy.Moves[j].Ownership = nil, nil, nil
+		}
+		c.Evaluations[i] = &copy
+	}
 }
 
 // requestReviewAnalysis は表示局面を優先し、その直前だけを補完する。連続パス・無勝負の終局は確定採点を使う。
 func (c *Controller) requestReviewAnalysis() {
 	for _, turn := range []int{c.reviewTurn, c.reviewTurn - 1} {
-		if turn < 0 || c.Evaluations[turn] != nil {
+		if turn < 0 || c.reviewRequested[turn] || c.Evaluations[turn] != nil && c.Evaluations[turn].LocalRead {
 			continue
 		}
 		b, err := c.Snapshot(turn)
@@ -427,6 +470,7 @@ func (c *Controller) requestReviewAnalysis() {
 		if b.Passes >= 2 || b.NoResult {
 			continue
 		}
+		c.reviewRequested[turn] = true
 		c.requestPosition(b, turn)
 		return
 	}
@@ -442,8 +486,11 @@ func (c *Controller) EndReview() {
 }
 
 // RecordDisplayed はCPU着手を描画した時点までの経過時間を記録する。描画所有者が各フレームに呼ぶ。
-func (c *Controller) RecordDisplayed() {
-	if c.Board == nil || len(c.Board.Moves) == 0 || c.Phase == Review {
+func (c *Controller) RecordDisplayed() { c.recordDisplayedAt(time.Now()) }
+
+// recordDisplayedAt は描画時刻で受入上限を判定し、同じ着手を二重計測しない。
+func (c *Controller) recordDisplayedAt(now time.Time) {
+	if c.Board == nil || len(c.Board.Moves) == 0 || c.Phase == Review || c.Phase == Summary {
 		return
 	}
 	turn := len(c.Board.Moves)
@@ -451,8 +498,8 @@ func (c *Controller) RecordDisplayed() {
 		return
 	}
 	c.cpuPresented = turn
-	c.LastCPUTime = time.Since(c.cpubegan)
-	if c.LastCPUTime > 5*time.Second {
+	c.LastCPUTime = now.Sub(c.cpubegan)
+	if c.LastCPUTime > CPUResponseLimit {
 		c.CPUDeadlineMiss = true
 	}
 }

@@ -16,6 +16,36 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 )
 
+// TestSummaryPreservesDangerWithinThreeLines は複合効果・最大石数でも危険と確認事項が3行内に残ることを検証する。
+func TestSummaryPreservesDangerWithinThreeLines(t *testing.T) {
+	source, err := text.NewGoTextFaceSource(bytes.NewReader(fontData))
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := &window{face: &text.GoTextFace{Source: source}}
+	facts := moveFacts{taken: 361, connected: 4, liberties: []int{360}, attacked: []changedGroup{{point: 0}}, rescued: []changedGroup{{point: 1}}}
+	for _, actor := range []string{"あなた", "CPU"} {
+		summary := summarizeMove(facts, "T19", actor, actor == "あなた", 19)
+		lines := g.wrapLines(summary, 445, 16)
+		if len(lines) != 3 || g.wrap(summary, 445, 16, 3) != summary {
+			t.Fatalf("summary was truncated: %q", summary)
+		}
+		for _, want := range []string{"アタリ", "取り361個", "相手アタリ", "救出", "連結", "確認"} {
+			if !strings.Contains(summary, want) {
+				t.Fatalf("summary lost %q", want)
+			}
+		}
+		if !strings.Contains(lines[0], "アタリ") {
+			t.Fatal("danger was not prioritized")
+		}
+	}
+	c, before, after := adviceFixture(t, app.Japanese, []int{2, 1, 8, 7, 0})
+	advice := reviewAdvice(c, 5, before, after)
+	if len(g.wrapLines(advice.summary, 445, 16)) > 3 || !strings.Contains(advice.summary, "アタリ") || !strings.Contains(advice.detail, "すぐに打てない") {
+		t.Fatal("compact summary changed detailed caution")
+	}
+}
+
 // adviceFixture は最終手の前後を独立した盤面で用意する。
 func adviceFixture(t *testing.T, rule app.Rule, points []int) (*app.Controller, *app.Board, *app.Board) {
 	t.Helper()
@@ -54,7 +84,7 @@ func TestAdviceDialogBlocksBackgroundAndOffersScrolling(t *testing.T) {
 		if h.rect.Min.Y < 677 {
 			t.Fatal("background action survived overlay")
 		}
-		if image.Pt(400, 700).In(h.rect) {
+		if image.Pt(280, 715).In(h.rect) {
 			h.action()
 		}
 	}
@@ -66,7 +96,7 @@ func TestAdviceDialogBlocksBackgroundAndOffersScrolling(t *testing.T) {
 		t.Fatal("up action missing after scroll")
 	}
 	for _, h := range g.actions {
-		if image.Pt(900, 700).In(h.rect) {
+		if image.Pt(1000, 720).In(h.rect) {
 			h.action()
 		}
 	}
@@ -132,7 +162,7 @@ func TestAdviceScrollBounds(t *testing.T) {
 	c, before, after := adviceFixture(t, app.Japanese, []int{0, 1, 7})
 	c.Phase = app.Review
 	for i := range c.Evaluations {
-		c.Evaluations[i] = &engine.Analysis{}
+		c.Evaluations[i] = &engine.Analysis{LocalRead: true}
 	}
 	g.controller, g.reviewBefore, g.reviewBoard = c, before, after
 	if err := g.setReview(1); err != nil {
@@ -171,6 +201,24 @@ func TestAdviceWrappingPreservesFullText(t *testing.T) {
 		for _, line := range lines {
 			if strings.HasPrefix(line, "。") || strings.HasPrefix(line, "、") || strings.HasPrefix(line, "）") || strings.HasSuffix(line, "（") {
 				t.Fatalf("invalid punctuation boundary: %q", line)
+			}
+		}
+	}
+	for _, value := range []string{"あCPUの石", "あT19の石", "あ（CPU）の石"} {
+		lines := g.wrapLines(value, 67, adviceFontSize)
+		if strings.Join(lines, "") != value {
+			t.Fatal("word wrapping lost text")
+		}
+		token := "CPU"
+		if strings.Contains(value, "T19") {
+			token = "T19"
+		}
+		if !strings.Contains(strings.Join(lines, "\n"), token) {
+			t.Fatalf("token split: %q", lines)
+		}
+		for _, line := range lines {
+			if w, _ := text.Measure(line, g.face, adviceLineHeight); w > 67 {
+				t.Fatal("word wrapping exceeded width")
 			}
 		}
 	}

@@ -63,7 +63,7 @@ type Profile struct {
 }
 
 // DefaultSettings は初心者用の初期設定を返す。
-func DefaultSettings() Settings { return Settings{Rule: Japanese, Size: 9, Difficulty: 1, Side: 0} }
+func DefaultSettings() Settings { return Settings{Rule: Japanese, Size: 9, Difficulty: 1, Side: 2} }
 
 // Validate は設定の範囲を確認する。
 func (s Settings) Validate() error {

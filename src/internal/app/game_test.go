@@ -36,6 +36,32 @@ func prepareReviewTest(t *testing.T) (*Controller, *gameFake) {
 	return c, f
 }
 
+// TestReviewEnrichesCachedAnalysis は通常解析を追加解析し、旧候補データを解放して棋譜を維持することを検証する。
+func TestReviewEnrichesCachedAnalysis(t *testing.T) {
+	c, f := prepareReviewTest(t)
+	c.Evaluations[0] = &engine.Analysis{LocalRead: true, ScoreLead: 9, Moves: []engine.Candidate{{Point: 5, Ownership: make([]float64, 81)}}}
+	old := c.Evaluations[0]
+	c.Evaluations[3] = &engine.Analysis{ScoreLead: 2}
+	if _, err := c.ReviewAt(3); err != nil {
+		t.Fatal(err)
+	}
+	q := takeQuery(t, f)
+	if !q.p.Review || len(q.p.Moves) != 3 {
+		t.Fatal("cached analysis was not enriched")
+	}
+	if c.Evaluations[0].LocalRead || c.Evaluations[0].ScoreLead != 9 || c.Evaluations[0].Moves[0].Ownership != nil || old.Moves[0].Ownership == nil {
+		t.Fatal("review cache eviction mutated shared data")
+	}
+	replyMove(q, 10)
+	pollUntil(t, c, func() bool { return c.Evaluations[3].Moves != nil })
+	replyMove(takeQuery(t, f), 11)
+	pollUntil(t, c, func() bool { return !c.Busy })
+	c.Poll()
+	if c.Busy || len(c.Board.Moves) != 4 {
+		t.Fatal("review repeated missing optional data or changed game")
+	}
+}
+
 // TestReviewFillsCurrentThenPrevious は現在局面と直前を自動で順に補完し、結果を保存しないことを検証する。
 func TestReviewFillsCurrentThenPrevious(t *testing.T) {
 	c, f := prepareReviewTest(t)
@@ -244,6 +270,34 @@ func pollUntil(t *testing.T, c *Controller, ready func() bool) {
 // replyMove は指定着手だけを返す確定解析を作る。
 func replyMove(q fakeQuery, point int) {
 	q.reply <- engine.Analysis{ScoreLead: 2, Winrate: .6, Moves: []engine.Candidate{{Point: point, Visits: 64}}, Ownership: make([]float64, q.p.Size*q.p.Size)}
+}
+
+// TestCPUDisplayDeadlineBoundary は7.5秒ちょうど・超過・重複描画・感想戦の計測除外を検証する。
+func TestCPUDisplayDeadlineBoundary(t *testing.T) {
+	for _, elapsed := range []time.Duration{5 * time.Second, CPUResponseLimit, CPUResponseLimit + time.Nanosecond} {
+		b, err := NewBoard(9, Japanese)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = b.Play(0); err != nil {
+			t.Fatal(err)
+		}
+		start := time.Unix(100, 0)
+		c := &Controller{Board: b, Player: White, Phase: Playing, cpubegan: start}
+		c.recordDisplayedAt(start.Add(elapsed))
+		if c.LastCPUTime != elapsed || c.CPUDeadlineMiss != (elapsed > CPUResponseLimit) {
+			t.Fatalf("deadline %v: time=%v miss=%v", elapsed, c.LastCPUTime, c.CPUDeadlineMiss)
+		}
+		c.recordDisplayedAt(start.Add(20 * time.Second))
+		if c.LastCPUTime != elapsed {
+			t.Fatal("duplicate display changed timing")
+		}
+		c.Phase, c.cpuPresented, c.LastCPUTime = Review, 0, 0
+		c.recordDisplayedAt(start.Add(20 * time.Second))
+		if c.LastCPUTime != 0 {
+			t.Fatal("review was timed")
+		}
+	}
 }
 
 // TestControllerUndoAndStale は旧局面の解析が待った後に適用されないことを検証する。

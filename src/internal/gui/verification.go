@@ -36,24 +36,28 @@ type acceptanceCase struct {
 const ownershipLimitMilliseconds int64 = 4500
 
 type verification struct {
-	StartupMS               int64            `json:"startupMilliseconds"`
-	Cases                   []acceptanceCase `json:"cases"`
-	Passed                  bool             `json:"passed"`
-	Method                  string           `json:"method"`
-	OwnershipLimitMS        int64            `json:"ownershipLimitMilliseconds"`
-	output                  string
-	index                   int
-	active                  bool
-	profile                 app.Profile
-	expectedTurn            int
-	displayedTurn           int
-	began                   time.Time
-	cpuComplete             bool
-	positionShownAt         time.Time
-	ownershipShown          bool
-	ownershipMS             int64
-	beforeCPUOwnershipShown bool
-	beforeCPUOwnershipMS    int64
+	SummaryCases               []summaryAcceptanceCase `json:"summaryCases"`
+	StartupMS                  int64                   `json:"startupMilliseconds"`
+	Cases                      []acceptanceCase        `json:"cases"`
+	Passed                     bool                    `json:"passed"`
+	Method                     string                  `json:"method"`
+	OwnershipLimitMS           int64                   `json:"ownershipLimitMilliseconds"`
+	output                     string
+	index                      int
+	active                     bool
+	profile                    app.Profile
+	expectedTurn               int
+	displayedTurn              int
+	began                      time.Time
+	cpuComplete                bool
+	positionShownAt            time.Time
+	ownershipShown             bool
+	ownershipMS                int64
+	beforeCPUOwnershipShown    bool
+	beforeCPUOwnershipMS       int64
+	summaryIndex, summaryStage int
+	summaryDrawn               bool
+	summaryBegan               time.Time
 }
 
 // newVerification は全90条件とCPU先手・プレイヤーパスの6条件を順番に測る。
@@ -70,6 +74,9 @@ func newVerification(output string) *verification {
 	for _, rule := range []app.Rule{app.Japanese, app.Chinese, app.Jungo} {
 		for _, action := range []string{"cpu-opening", "player-pass"} {
 			v.Cases = append(v.Cases, acceptanceCase{Rule: rule, Size: 19, Difficulty: 1, Position: "opening", Action: action})
+		}
+		for _, size := range []int{7, 19} {
+			v.SummaryCases = append(v.SummaryCases, summaryAcceptanceCase{Rule: rule, Size: size})
 		}
 	}
 	return v
@@ -129,6 +136,9 @@ func (g *window) updateVerification() error {
 		v.profile = p
 	}
 	if v.index >= len(v.Cases) {
+		if v.summaryIndex < len(v.SummaryCases) {
+			return g.updateSummaryVerification()
+		}
 		if err := g.saveVerification(); err != nil {
 			return err
 		}
@@ -209,7 +219,7 @@ func (g *window) updateVerification() error {
 			// 開始時の設定保存も含め、計測開始が早い側を採る。
 			current.Milliseconds = max(current.Milliseconds, time.Since(v.began).Milliseconds())
 		}
-		current.Passed = current.Milliseconds <= 5000 && c.LastCPUTime <= 5*time.Second && !c.CPUDeadlineMiss
+		current.Passed = current.Milliseconds <= app.CPUResponseLimit.Milliseconds() && c.LastCPUTime <= app.CPUResponseLimit && !c.CPUDeadlineMiss
 		if !current.Passed {
 			v.Passed = false
 			current.Error = "display deadline exceeded"
@@ -253,6 +263,9 @@ func (g *window) updateVerification() error {
 // recordVerificationDraw は現在局面が描かれた時刻と、最初の有効な色分けの描画時刻だけを記録する。
 func (g *window) recordVerificationDraw(now time.Time) {
 	v := g.verification
+	if g.summary != nil && g.controller.SummarySession.Ready {
+		v.summaryDrawn = true
+	}
 	turn := len(g.controller.Board.Moves)
 	if v.displayedTurn != turn {
 		v.displayedTurn = turn
@@ -281,6 +294,26 @@ func (g *window) saveVerification() error {
 
 // preparePreview は画面確認専用の合成例を作る。実測や実対局の結果には使用しない。
 func (g *window) preparePreview(mode string) error {
+	if strings.HasPrefix(mode, "summary-") {
+		return g.prepareSummaryPreview(mode)
+	}
+	if mode == "review-ai" || mode == "review-ai-19" || mode == "review-detail-ai" || mode == "review-detail-ai-risk" {
+		return g.prepareAIPreview(mode)
+	}
+	if mode == "review-focus-moved" || mode == "review-focus-before" {
+		detail := "review-detail-19"
+		if mode == "review-focus-before" {
+			detail = "review-detail-before"
+		}
+		if err := g.prepareAdvicePreview(detail); err != nil {
+			return err
+		}
+		if mode == "review-focus-moved" {
+			g.advice.diagram.pan(-4, 2)
+		}
+		g.dismiss()
+		return nil
+	}
 	if strings.HasPrefix(mode, "review-detail") {
 		return g.prepareAdvicePreview(mode)
 	}
@@ -291,12 +324,20 @@ func (g *window) preparePreview(mode string) error {
 	if mode == "game-pass" {
 		moves = 31
 	}
-	b, err := fixtureBoard(size, app.Japanese, moves)
+	rule := app.Japanese
+	if mode == "game-white-jungo" {
+		rule = app.Jungo
+	}
+	b, err := fixtureBoard(size, rule, moves)
 	if err != nil {
 		return err
 	}
 	c := &app.Controller{Phase: app.Playing, Board: b, Player: app.Black, Settings: app.DefaultSettings(), Profile: app.Profile{Name: "画面確認用サンプル", Ranks: [3]float64{0, 0, 0}}}
 	g.controller = c
+	c.Settings.Rule, c.Settings.Size = rule, size
+	if mode == "game-white-jungo" {
+		c.Player = app.White
+	}
 	g.selected = 0
 	g.profiles = []app.Profile{c.Profile}
 	g.notice = "画面確認用の合成例です。戦績は保存しません。"
@@ -310,7 +351,7 @@ func (g *window) preparePreview(mode string) error {
 			return err
 		}
 	}
-	if mode != "game" && mode != "game-wait" && mode != "game-pass" {
+	if !strings.HasPrefix(mode, "game") {
 		if err = b.Play(-1); err != nil {
 			return err
 		}
@@ -343,6 +384,15 @@ func (g *window) preparePreview(mode string) error {
 	c.Score = score
 	switch mode {
 	case "game":
+	case "game-white-jungo":
+	case "game-extremes":
+		c.Evaluations[len(b.Moves)-1].ScoreLead = -20000
+		c.Evaluations[len(b.Moves)].ScoreLead = 20000
+		c.Evaluations[len(b.Moves)].Winrate = 1
+	case "game-gap":
+		for i := 8; i <= 12; i++ {
+			c.Evaluations[i] = nil
+		}
 	case "game-pass":
 	case "game-wait":
 		c.Evaluations[len(b.Moves)] = nil
@@ -384,10 +434,65 @@ func (g *window) preparePreview(mode string) error {
 	return err
 }
 
+// prepareAIPreview は合法棋譜と明示した合成読み筋で表示を確認し、実AIの測定値には使わない。
+func (g *window) prepareAIPreview(mode string) error {
+	size := 7
+	if mode == "review-ai-19" {
+		size = 19
+	}
+	b, err := app.NewBoard(size, app.Japanese)
+	if err != nil {
+		return err
+	}
+	for _, point := range []int{size + 1, 3*size + 1, size + 3} {
+		if err = b.Play(point); err != nil {
+			return err
+		}
+	}
+	g.reviewBoard = b
+	g.reviewBefore, err = app.Replay(size, b.Rule, b.Moves, 2)
+	if err != nil {
+		return err
+	}
+	g.reviewTurn = 3
+	g.controller = &app.Controller{Phase: app.Review, Board: b, Player: app.Black, Settings: app.DefaultSettings(), Evaluations: make([]*engine.Analysis, 4)}
+	g.controller.Settings.Size = size
+	a := &engine.Analysis{LocalRead: true, Ownership: make([]float64, size*size), Winrate: .5}
+	for point, color := range b.Cells {
+		if color == app.Black {
+			a.Ownership[point] = .9
+		}
+		if color == app.White {
+			a.Ownership[point] = -.9
+		}
+	}
+	var pvs = [][]int{{size + 2, 2*size + 1, 0, 2*size + 2, 1, 2*size + 3}, {0, 2*size + 1, size + 2, 2*size + 2, 1, 2*size + 3}}
+	if mode == "review-detail-ai-risk" {
+		pvs = [][]int{{size + 2, 2*size + 1}}
+		a.Ownership[size+3] = -.9
+	}
+	for _, pv := range pvs {
+		visits := make([]int, len(pv))
+		for i := range visits {
+			visits[i] = 4
+		}
+		a.Moves = append(a.Moves, engine.Candidate{Point: pv[0], Visits: 8, PV: pv, PVVisits: visits, Ownership: append([]float64(nil), a.Ownership...)})
+	}
+	g.controller.Evaluations[3] = a
+	g.tab = 2
+	g.syncPhase()
+	if strings.HasPrefix(mode, "review-detail") {
+		g.openReviewAdvice()
+	}
+	return nil
+}
+
 // prepareAdvicePreview は詳細・複合効果・待機・長文の描画例を作り、実プロフィールやエンジンへ接続しない。
 func (g *window) prepareAdvicePreview(mode string) error {
 	switch mode {
-	case "review-detail", "review-detail-cpu", "review-detail-combined", "review-detail-wait", "review-detail-error", "review-detail-long", "review-detail-bottom", "review-detail-min":
+	case "review-detail", "review-detail-cpu", "review-detail-combined", "review-detail-wait", "review-detail-error", "review-detail-long", "review-detail-bottom", "review-detail-min",
+		"review-detail-before", "review-detail-outside", "review-detail-pass", "review-detail-empty",
+		"review-detail-7", "review-detail-9", "review-detail-11", "review-detail-13", "review-detail-15", "review-detail-19":
 	default:
 		return errors.New("unknown advice preview mode")
 	}
@@ -399,7 +504,7 @@ func (g *window) prepareAdvicePreview(mode string) error {
 		return err
 	}
 	c := g.controller
-	if mode == "review-detail-combined" {
+	if mode == "review-detail-combined" || mode == "review-detail-before" {
 		b, err := app.NewBoard(7, app.Japanese)
 		if err != nil {
 			return err
@@ -421,6 +526,66 @@ func (g *window) prepareAdvicePreview(mode string) error {
 			return err
 		}
 	}
+	if size := map[string]int{"review-detail-7": 7, "review-detail-9": 9, "review-detail-11": 11, "review-detail-13": 13, "review-detail-15": 15, "review-detail-19": 19}[mode]; size > 0 {
+		b, err := fixtureBoard(size, app.Japanese, size*2)
+		if err != nil {
+			return err
+		}
+		c.Board = b
+		c.Evaluations = make([]*engine.Analysis, len(b.Moves)+1)
+		g.reviewTurn = len(b.Moves) - 1
+		g.reviewBoard, err = c.Snapshot(g.reviewTurn)
+		if err != nil {
+			return err
+		}
+		g.reviewBefore, err = c.Snapshot(g.reviewTurn - 1)
+		if err != nil {
+			return err
+		}
+	}
+	if mode == "review-detail-outside" {
+		b, err := app.NewBoard(19, app.Japanese)
+		if err != nil {
+			return err
+		}
+		for p := 0; p < 19; p++ {
+			if err = b.Play(p); err != nil {
+				return err
+			}
+			if err = b.Play(342 + p); err != nil {
+				return err
+			}
+		}
+		c.Board = b
+		c.Evaluations = make([]*engine.Analysis, len(b.Moves)+1)
+		g.reviewTurn = 37
+		g.reviewBoard, err = c.Snapshot(37)
+		if err != nil {
+			return err
+		}
+		g.reviewBefore, err = c.Snapshot(36)
+		if err != nil {
+			return err
+		}
+	}
+	if mode == "review-detail-pass" || mode == "review-detail-empty" {
+		g.reviewTurn = len(c.Board.Moves)
+		if mode == "review-detail-empty" {
+			g.reviewTurn = 0
+		}
+		var err error
+		g.reviewBoard, err = c.Snapshot(g.reviewTurn)
+		if err != nil {
+			return err
+		}
+		g.reviewBefore = nil
+		if g.reviewTurn > 0 {
+			g.reviewBefore, err = c.Snapshot(g.reviewTurn - 1)
+			if err != nil {
+				return err
+			}
+		}
+	}
 	if mode == "review-detail-wait" || mode == "review-detail-error" {
 		c.Evaluations = make([]*engine.Analysis, len(c.Board.Moves)+1)
 		c.Busy = mode == "review-detail-wait"
@@ -430,6 +595,10 @@ func (g *window) prepareAdvicePreview(mode string) error {
 	}
 	g.syncPhase()
 	g.openReviewAdvice()
+	if mode == "review-detail-before" {
+		g.advice.diagram.selectTarget(1)
+		g.advice.diagram.showBefore = true
+	}
 	if mode == "review-detail-long" || mode == "review-detail-bottom" {
 		body := g.advice.body
 		for i := 1; i <= 6; i++ {

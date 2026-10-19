@@ -91,7 +91,7 @@ func TestResultChoicesAndReviewReturn(t *testing.T) {
 		t.Fatal("choices interrupted animation")
 	}
 	g.advanceResult(started.Add(900 * time.Millisecond))
-	if g.dialog == nil || len(g.dialog.choices) != 3 {
+	if g.dialog == nil || len(g.dialog.choices) != 4 {
 		t.Fatal("result choices missing")
 	}
 	g.chooseDialog(0)
@@ -110,7 +110,7 @@ func TestResultChoicesAndReviewReturn(t *testing.T) {
 		t.Fatal("dismissed prompt reopened automatically")
 	}
 	g.openResultChoices()
-	g.chooseDialog(2)
+	g.chooseDialog(3)
 	p, err := store.Load(g.controller.Profile.ID)
 	if err != nil || p.Revision != revision || p.GamesPlayed != 1 || g.controller.Phase != app.Idle {
 		t.Fatal("navigation saved result again", err)
@@ -125,17 +125,52 @@ func TestNextGameFailureKeepsChoices(t *testing.T) {
 	if err := os.WriteFile(lock, nil, 0600); err != nil {
 		t.Fatal(err)
 	}
-	g.chooseDialog(1)
+	g.chooseDialog(2)
 	if g.dialog == nil || g.dialog.problem == "" || g.controller.Phase != app.Finished {
 		t.Fatal("failed next game discarded choices")
 	}
 	if err := os.Remove(lock); err != nil {
 		t.Fatal(err)
 	}
-	g.chooseDialog(1)
+	g.chooseDialog(2)
 	g.syncPhase()
 	if g.dialog != nil || g.controller.Phase != app.Playing || g.tab != 1 || g.controller.Profile.GamesPlayed != 1 {
 		t.Fatal("next game failed or retrained")
+	}
+}
+
+// TestSummaryChoicesNeverRetrain は概要の開閉・Esc・最終ページ・次局で二重保存や演出再開が起きないことを検証する。
+func TestSummaryChoicesNeverRetrain(t *testing.T) {
+	g, store := resultWindow(t)
+	started, revision := g.animationStart, g.controller.Profile.Revision
+	for i := 0; i < 3; i++ {
+		g.openResultChoices()
+		g.chooseDialog(1)
+		if g.summary == nil || g.dialog != nil || g.controller.Phase != app.Summary || g.autoplay {
+			t.Fatal("summary did not open")
+		}
+		if i == 1 {
+			g.summary.changePage(3)
+			g.summary.close()
+		} else {
+			g.dismiss()
+		}
+		if g.summary != nil || g.dialog == nil || g.controller.Phase != app.Finished || g.controller.Busy || !g.animationStart.Equal(started) {
+			t.Fatal("summary exit did not cancel or restarted result")
+		}
+	}
+	p, err := store.Load(g.controller.Profile.ID)
+	if err != nil || p.Revision != revision || p.GamesPlayed != 1 {
+		t.Fatal("summary changed profile", err)
+	}
+	g.chooseDialog(0)
+	if g.controller.Phase != app.Review {
+		t.Fatal("normal review inaccessible")
+	}
+	g.finishReview()
+	g.chooseDialog(2)
+	if g.controller.Phase != app.Playing || g.controller.SummarySession != nil || g.controller.Profile.GamesPlayed != 1 {
+		t.Fatal("next game retained summary or retrained")
 	}
 }
 
