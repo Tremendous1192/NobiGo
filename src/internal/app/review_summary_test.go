@@ -150,3 +150,49 @@ func TestSummaryCombinedEffectsAndBound(t *testing.T) {
 		t.Fatal("oversized summary accepted")
 	}
 }
+
+// TestSummaryStageCountsActions は石数と行動回数を分け、区間内のCPU着手だけを代表手にすることを検証する。
+func TestSummaryStageCountsActions(t *testing.T) {
+	b, _ := NewBoard(7, Japanese)
+	for _, point := range []int{0, 1, 14, 48, 7} {
+		if err := b.Play(point); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s, err := BuildGameSummary(b, White, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := s.Stages[2]
+	if last.RescueMoves != 1 || last.ConnectMoves != 1 || last.CaptureMoves != 0 || last.Representative != 5 {
+		t.Fatalf("incorrect action counts: %+v", last)
+	}
+	for _, stage := range s.Stages {
+		m := s.Moves[stage.Representative-1]
+		if m.Color != Black || m.Turn < stage.From || m.Turn > stage.To {
+			t.Fatal("representative is not a CPU move in the stage")
+		}
+	}
+}
+
+// TestSummaryRepresentativeUsesFrequency は一度の大きな救出が繰り返された取りの代表を覆わないことを検証する。
+func TestSummaryRepresentativeUsesFrequency(t *testing.T) {
+	moves := []SummaryMove{
+		{Turn: 1, Point: 0, Color: Black, Saved: 20},
+		{Turn: 2, Point: 1, Color: White, Captured: 30},
+		{Turn: 3, Point: 2, Color: Black, Captured: 1},
+		{Turn: 4, Point: 3, Color: White},
+		{Turn: 5, Point: 4, Color: Black, Captured: 2},
+	}
+	stage := SummaryStage{From: 1, To: 5, CPUMoves: 3, CaptureMoves: 2, RescueMoves: 1}
+	if got := summaryRepresentative(stage, moves, White); got != 5 {
+		t.Fatal("infrequent rescue selected", got)
+	}
+	stage.From, stage.To = 3, 3
+	if got := summaryRepresentative(stage, moves, White); got != 3 {
+		t.Fatal("stage boundary ignored", got)
+	}
+	if got := summaryRepresentative(SummaryStage{}, moves, White); got != 0 {
+		t.Fatal("empty stage has representative")
+	}
+}

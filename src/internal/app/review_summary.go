@@ -1,4 +1,4 @@
-// 作成日: 2026-10-19。完了棋譜と解析から概要の根拠を集計する。入力・プロフィールを変更せず、未解析の優劣を推定しない。
+// 作成日: 2026-10-19。更新日: 2026-10-24。完了棋譜と解析から概要の根拠を集計する。入力・プロフィールを変更せず、未解析の優劣を推定しない。
 package app
 
 import (
@@ -23,6 +23,8 @@ type SummaryMove struct {
 // SummaryStage は手数を三分割した区間のCPUの実着手を集計する。意図そのものではない。
 type SummaryStage struct {
 	From, To, CPUMoves, EdgeMoves, Captured, Saved, Connected int
+	CaptureMoves, RescueMoves, ConnectMoves                   int
+	Representative                                            int // 1始まりのCPUの代表手。0は着手なし。
 }
 
 // GameSummary は解析済み範囲から選んだ概要を保持する。候補はMoves内を参照し、呼出し元は読取り専用で扱う。
@@ -130,6 +132,15 @@ func BuildGameSummary(board *Board, player Color, evaluations []*engine.Analysis
 			stage.Captured += m.Captured
 			stage.Saved += m.Saved
 			stage.Connected += m.Connected
+			if m.Captured > 0 {
+				stage.CaptureMoves++
+			}
+			if m.Saved > 0 {
+				stage.RescueMoves++
+			}
+			if m.Connected > 0 {
+				stage.ConnectMoves++
+			}
 			if move.Point >= 0 {
 				x, y := move.Point%b.Size, move.Point/b.Size
 				if min(x, y, b.Size-1-x, b.Size-1-y) < max(1, b.Size/5) {
@@ -159,7 +170,40 @@ func BuildGameSummary(board *Board, player Color, evaluations []*engine.Analysis
 			result.Improvement = m
 		}
 	}
+	for i := range result.Stages {
+		stage := &result.Stages[i]
+		stage.Representative = summaryRepresentative(*stage, result.Moves, player)
+	}
 	return result, nil
+}
+
+// summaryRepresentative は区間内で最も多い行動をしたCPUの手を選ぶ。同点は複合効果、手順の順で決める。
+func summaryRepresentative(stage SummaryStage, moves []SummaryMove, player Color) int {
+	var best *SummaryMove
+	weight := -1
+	most := max(stage.CaptureMoves, stage.RescueMoves, stage.ConnectMoves)
+	for i := range moves {
+		m := &moves[i]
+		if m.Color == player || m.Turn < stage.From || m.Turn > stage.To {
+			continue
+		}
+		w := 0
+		if m.Point >= 0 {
+			w++
+		}
+		for _, effect := range [][2]int{{m.Captured, stage.CaptureMoves}, {m.Saved, stage.RescueMoves}, {m.Connected, stage.ConnectMoves}} {
+			if effect[0] > 0 && effect[1] == most {
+				w += 2
+			}
+		}
+		if best == nil || w > weight || w == weight && summaryEffect(m) > summaryEffect(best) {
+			best, weight = m, w
+		}
+	}
+	if best == nil {
+		return 0
+	}
+	return best.Turn
 }
 
 // summaryEffect は説明できる取り・救出・連結を優先するための同点比較値。

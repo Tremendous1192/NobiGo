@@ -129,7 +129,7 @@ func run() (result error) {
 	if err = os.WriteFile(filepath.Join(appDir, "checksums.json"), append(data, '\n'), 0600); err != nil {
 		return err
 	}
-	archive := filepath.Join(stage, "NobiGo-v0.7.0-windows-amd64.zip")
+	archive := filepath.Join(stage, "NobiGo-v0.7.1-windows-amd64.zip")
 	if err = makeZip(appDir, archive); err != nil {
 		return err
 	}

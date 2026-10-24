@@ -1,4 +1,4 @@
-// 作成日: 2026-10-19。感想戦の概要を4ページで表示する。確定得点とAIの推定を区別し、盤面・戦績を変更しない。
+// 作成日: 2026-10-19。更新日: 2026-10-24。概要の文章と対象石を4ページで表示する。確定得点とAIの推定を区別し、盤面・戦績を変更しない。
 package gui
 
 import (
@@ -23,6 +23,8 @@ type summaryDialog struct {
 	board                     *app.Board
 	canvas                    *ebiten.Image
 	move                      *app.SummaryMove
+	marked                    []int
+	alternativeOK             bool
 	close, retry              func()
 }
 
@@ -60,77 +62,6 @@ func summaryResult(c *app.Controller) string {
 	return fmt.Sprintf("%s\n確定得点：黒 %.1f ／ 白 %.1f%s", result, s.Black, s.White, unit)
 }
 
-// summaryStageText は実着手の集計を根拠に、段階ごとの狙いを推定として説明する。
-func summaryStageText(stage app.SummaryStage, name string) string {
-	if stage.CPUMoves == 0 {
-		return name + "：説明できるCPUの着手がありません。"
-	}
-	aim := "一つの狙いに絞れる材料はありません。"
-	switch {
-	case stage.Saved > 0:
-		aim = "危険な石を助け、自分の形を保とうとしたと考えられます。"
-	case stage.Captured > 0:
-		aim = "相手の石を取り、周囲で打ちやすくする狙いが考えられます。"
-	case stage.Connected > 0:
-		aim = "離れた石をつなぎ、分断されにくくする狙いが考えられます。"
-	case stage.EdgeMoves*2 >= stage.CPUMoves:
-		aim = "盤の端を利用して、隅や辺から形を作る狙いが考えられます。"
-	}
-	return fmt.Sprintf("%s（%d～%d手目）\nCPU %d手／隅・辺 %d手／取り %d個／救出 %d個／連結 %d組。\n%s", name, stage.From, stage.To, stage.CPUMoves, stage.EdgeMoves, stage.Captured, stage.Saved, stage.Connected, aim)
-}
-
-// summaryPageContent は各ページの文章と根拠となる手を返す。根拠のない好手・戦略は補わない。
-func summaryPageContent(c *app.Controller, page int) (title, body string, move *app.SummaryMove) {
-	s := c.SummarySession.Data
-	switch page {
-	case 0:
-		title = "結果と一局のハイライト"
-		body = summaryResult(c) + fmt.Sprintf("\n\n全%d手。実際の取り石は黒%d個、白%d個でした。", len(c.Board.Moves), c.Board.Captured[app.Black], c.Board.Captured[app.White])
-		move = s.Highlight
-		if move != nil {
-			body += fmt.Sprintf("\n解析済みの範囲で目差の変動が最大だったのは%d手目です。着手した側の予測目差は%+.1f目、勝率は%+.1fポイント変わりました。", move.Turn, move.Swing, move.WinChange*100)
-		} else {
-			body += "\nハイライトを選べる前後のAI評価がまだ揃っていません。"
-		}
-	case 1:
-		title = "CPUの戦略（推定）"
-		body = "手数を三分割した区間です。実際の着手の傾向から振り返ります。\n\n"
-		for i, name := range []string{"序盤", "中盤", "終盤"} {
-			body += summaryStageText(s.Stages[i], name) + "\n\n"
-		}
-	case 2:
-		title = "あなたの良かった場面"
-		move = s.GoodMove
-		if move == nil {
-			body = "好手として紹介できるAI評価と盤面の根拠が揃っていません。これは、良い手がなかったという意味ではありません。"
-		} else {
-			body = fmt.Sprintf("%d手目の%s。推定損失は%.1f目でした。", move.Turn, adviceVertex(move.Point, c.Board.Size), move.Loss)
-			if move.Captured+move.Saved+move.Connected > 0 {
-				body += fmt.Sprintf("\n取り%d個・救出%d個・連結%d組の効果がありました。", move.Captured, move.Saved, move.Connected)
-			}
-			if move.BestCandidate {
-				body += "\nAIの有力候補と同じ手を選べました。"
-			}
-			body += "\n\n次局も、打つ前に取れる石・助ける石・つながる石を確認してみましょう。"
-		}
-	case 3:
-		title = "次の一局で試すこと"
-		move = s.Improvement
-		if move == nil {
-			body = "具体的な改善場面を示すだけの解析と合法な比較候補が揃っていません。\n\n次局は打つ前に、自分の石が取られそうか、相手の石を取れるかを順に確認しましょう。"
-		} else {
-			body = fmt.Sprintf("%d手目の%sを振り返ります。推定損失は%.1f目でした。\n着手前の盤面で、比較候補の%sも確認してみましょう。", move.Turn, adviceVertex(move.Point, c.Board.Size), move.Loss, adviceVertex(move.Alternative, c.Board.Size))
-			before, err := c.Snapshot(move.Turn - 1)
-			after, afterErr := c.Snapshot(move.Turn)
-			if err == nil && afterErr == nil {
-				body += "\n\n" + reviewAdvice(c, move.Turn, before, after).summary
-			}
-			body += "\n\n比較候補の先の結果は確定していません。周囲の石の逃げ道を比べることから始めましょう。"
-		}
-	}
-	return
-}
-
 // refreshSummaryPage はページ移動・再試行・解析完了時だけ文章と盤面を作り直す。
 func (g *window) refreshSummaryPage(d *summaryDialog) {
 	c := g.controller
@@ -140,31 +71,42 @@ func (g *window) refreshSummaryPage(d *summaryDialog) {
 	}
 	d.cachedPage, d.source, d.ready = d.page, s, s.Ready
 	d.title, d.body, d.move = summaryPageContent(c, d.page)
-	d.lines = g.wrapLines(strings.TrimSpace(d.body), 510, 20)
+	width := 510
+	if d.page == 1 {
+		width = 1020
+	}
+	d.lines = g.wrapLines(strings.TrimSpace(d.body), float64(width), 20)
 	d.maxScroll = math.Max(0, float64(len(d.lines)*30-450))
 	d.scrollSummary(0)
 	d.board = nil
+	d.marked = nil
+	d.alternativeOK = false
 	if d.move != nil {
-		turn := d.move.Turn
 		stage := "着手後"
-		if d.page == 3 {
-			turn--
-			stage = "着手前"
-		}
-		b, err := c.Snapshot(turn)
-		if err == nil {
-			d.board = b
-			d.boardCaption = fmt.Sprintf("%d手目の%s", d.move.Turn, stage)
-		} else {
+		scene, err := makeSummaryScene(c, d.move)
+		if err != nil {
 			d.boardCaption = "対象局面を再現できません。"
+			return
 		}
+		d.board = scene.after
+		if d.page == 3 {
+			stage = "着手前"
+			d.board = scene.before
+		}
+		d.marked = summaryMarkedPoints(scene, d.move, d.page == 3)
+		d.alternativeOK = d.page == 3 && scene.alternative != nil
+		d.boardCaption = fmt.Sprintf("%d手目の%s", d.move.Turn, stage)
 	}
 }
 
 // updateSummaryInput は概要の本文にだけホイール・移動キーを適用する。
 func (g *window) updateSummaryInput(d *summaryDialog) {
 	x, y := ebiten.CursorPosition()
-	if image.Pt(x, y).In(image.Rect(65, 185, 610, 640)) {
+	right := 610
+	if d.page == 1 {
+		right = 1115
+	}
+	if image.Pt(x, y).In(image.Rect(65, 185, right, 640)) {
 		_, wheel := ebiten.Wheel()
 		d.scrollSummary(-wheel * 90)
 	}
@@ -192,11 +134,17 @@ func (g *window) drawSummaryDialog(screen *ebiten.Image, d *summaryDialog) {
 		status = "追加解析を完了できませんでした。取得済みの範囲を表示しています。"
 	}
 	g.label(screen, status, 65, 125, 17, muted)
+	hint := "空き＝ひとまとまりの石の上下左右に接する空いた交点。"
 	if g.controller.Board.Rule == app.Jungo {
-		g.label(screen, "途中のAI評価は近似。確定得点は盤上の石数です。", 65, 153, 14, warning)
+		hint += " 純碁のAI評価は近似。得点は最後の石数です。"
 	}
-	if d.canvas == nil {
-		d.canvas = ebiten.NewImage(530, 450)
+	g.label(screen, hint, 65, 153, 14, muted)
+	width := 530
+	if d.page == 1 {
+		width = 1050
+	}
+	if d.canvas == nil || d.canvas.Bounds().Dx() != width {
+		d.canvas = ebiten.NewImage(width, 450)
 	}
 	d.canvas.Fill(tint(panel))
 	for i, line := range d.lines {
@@ -213,7 +161,7 @@ func (g *window) drawSummaryDialog(screen *ebiten.Image, d *summaryDialog) {
 	}
 	if d.board != nil {
 		g.drawSummaryBoard(screen, d)
-	} else {
+	} else if d.page != 1 {
 		g.label(screen, "対象盤面はありません", 720, 365, 20, muted)
 	}
 	g.button(screen, image.Rect(65, 695, 250, 737), "前のページ", d.page > 0, func() { d.changePage(-1) })
@@ -242,13 +190,16 @@ func (g *window) drawSummaryDialog(screen *ebiten.Image, d *summaryDialog) {
 func (g *window) drawSummaryBoard(screen *ebiten.Image, d *summaryDialog) {
 	b := d.board
 	r := image.Rect(655, 225, 1105, 610)
-	left, top, step := overviewGeometry(r.Inset(14), b.Size)
+	left, top, step := overviewGeometry(r.Inset(34), b.Size)
 	g.label(screen, d.boardCaption, 655, 190, 21, foreground)
 	rect(screen, r, 0xdab47b)
 	for i := 0; i < b.Size; i++ {
 		x, y := left+float64(i)*step, top+float64(i)*step
 		vector.StrokeLine(screen, float32(x), float32(top), float32(x), float32(top+float64(b.Size-1)*step), 1, tint(0x654d32), true)
 		vector.StrokeLine(screen, float32(left), float32(y), float32(left+float64(b.Size-1)*step), float32(y), 1, tint(0x654d32), true)
+		column := strings.TrimRight(adviceVertex(i, b.Size), "0123456789")
+		g.label(screen, column, x-4, float64(r.Min.Y)+2, 13, 0x302619)
+		g.label(screen, fmt.Sprint(b.Size-i), left-step*.5-22, y-9, 13, 0x302619)
 	}
 	for point, stone := range b.Cells {
 		if stone == app.Empty {
@@ -261,8 +212,22 @@ func (g *window) drawSummaryBoard(screen *ebiten.Image, d *summaryDialog) {
 		}
 		vector.DrawFilledCircle(screen, float32(x), float32(y), float32(step*.42), tint(color), true)
 	}
+	stoneMark, captureMark := false, false
+	for _, point := range d.marked {
+		x, y := left+float64(point%b.Size)*step, top+float64(point/b.Size)*step
+		radius := step * .47
+		if b.Cells[point] == app.Empty {
+			captureMark = true
+			radius *= .5
+			vector.StrokeLine(screen, float32(x-radius), float32(y-radius), float32(x+radius), float32(y+radius), 2, tint(0x805b08), true)
+			vector.StrokeLine(screen, float32(x-radius), float32(y+radius), float32(x+radius), float32(y-radius), 2, tint(0x805b08), true)
+		} else {
+			stoneMark = true
+			vector.StrokeRect(screen, float32(x-radius), float32(y-radius), float32(radius*2), float32(radius*2), 2, tint(0x805b08), true)
+		}
+	}
 	for i, point := range []int{d.move.Point, d.move.Alternative} {
-		if point < 0 || i == 1 && (d.page != 3 || !d.move.HasAlternative) {
+		if point < 0 || i == 1 && !d.alternativeOK {
 			continue
 		}
 		x, y := left+float64(point%b.Size)*step, top+float64(point/b.Size)*step
@@ -271,10 +236,35 @@ func (g *window) drawSummaryBoard(screen *ebiten.Image, d *summaryDialog) {
 			color = 0x125bb4
 		}
 		vector.StrokeCircle(screen, float32(x), float32(y), float32(step*.46), 3, tint(color), true)
+		letter := []string{"A", "B"}[i]
+		ink := color
+		if b.Cells[point] == app.Black {
+			ink = 0xffffff
+		} else if b.Cells[point] == app.White {
+			ink = 0x18222d
+		}
+		g.label(screen, letter, x-4, y-9, 13, ink)
 	}
-	caption := "赤い輪：実際の着手 " + adviceVertex(d.move.Point, b.Size)
-	if d.page == 3 {
-		caption += "\n青い輪：比較候補 " + adviceVertex(d.move.Alternative, b.Size)
+	caption := "赤い印A：実際の手 " + adviceVertex(d.move.Point, b.Size)
+	if d.move.Point < 0 {
+		caption = "実際の手：パス（盤上の印なし）"
 	}
-	g.label(screen, caption, 655, 622, 16, muted)
+	if d.alternativeOK {
+		if d.move.Alternative < 0 {
+			caption += "\nAI候補：パス（盤上の印なし）"
+		} else {
+			caption += "\n青い印B：AI候補 " + adviceVertex(d.move.Alternative, b.Size)
+		}
+	}
+	var marks []string
+	if stoneMark {
+		marks = append(marks, "枠：説明する石")
+	}
+	if captureMark {
+		marks = append(marks, "×：取った石の場所")
+	}
+	if len(marks) > 0 {
+		caption += "\n" + strings.Join(marks, "　")
+	}
+	g.label(screen, caption, 655, 618, 15, muted)
 }

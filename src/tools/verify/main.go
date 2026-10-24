@@ -55,7 +55,7 @@ func run() (result error) {
 		return err
 	}
 	defer func() { result = errors.Join(result, os.RemoveAll(temp)) }()
-	archive := filepath.Join(root, "..", "dist", "NobiGo-v0.7.0-windows-amd64.zip")
+	archive := filepath.Join(root, "..", "dist", "NobiGo-v0.7.1-windows-amd64.zip")
 	hash, err := verifyArchiveHash(archive)
 	if err != nil {
 		return err
@@ -72,14 +72,14 @@ func run() (result error) {
 	exe := filepath.Join(appDir, "NobiGo.exe")
 	for _, mode := range []string{"startup", "startup-check", "startup-download", "startup-verify", "startup-load", "startup-error", "startup-repair", "startup-cancel", "game", "game-header-7", "game-header-9", "game-header-11", "game-header-13", "game-header-15", "game-header-19", "game-header-chinese", "game-header-jungo", "game-header-long", "game-header-min", "game-wait", "game-pass", "scoring", "result", "choices", "review", "review-player", "review-19", "review-detail", "review-detail-cpu", "review-detail-combined", "review-detail-wait", "review-detail-error", "review-detail-long", "review-detail-bottom", "review-detail-min", "game-white-jungo", "game-extremes", "game-gap", "review-detail-before", "review-detail-outside", "review-detail-pass", "review-detail-empty", "review-detail-7", "review-detail-9", "review-detail-11", "review-detail-13", "review-detail-15", "review-detail-19", "review-focus-moved", "review-focus-before", "review-ai", "review-ai-19", "review-detail-ai", "review-detail-ai-risk",
 		"review-detail-rescue", "review-detail-atari", "review-detail-jungo-empty", "review-detail-jungo-pass",
-		"summary-1", "summary-2", "summary-3", "summary-4", "summary-wait", "summary-error", "summary-missing", "summary-white", "summary-jungo", "summary-draw", "summary-empty", "summary-noresult", "summary-long", "summary-bottom", "summary-min", "summary-7", "summary-9", "summary-11", "summary-13", "summary-15", "summary-19"} {
-		cmd := exec.CommandContext(ctx, exe, "-preview", mode, "-screenshot", filepath.Join(work, "package-v0.7.0-advice-"+mode+".png"))
+		"summary-1", "summary-2", "summary-3", "summary-4", "summary-wait", "summary-error", "summary-missing", "summary-white", "summary-jungo", "summary-draw", "summary-empty", "summary-noresult", "summary-long", "summary-bottom", "summary-min", "summary-7", "summary-9", "summary-11", "summary-13", "summary-15", "summary-19", "summary-rescue", "summary-compare", "summary-compare-bottom", "summary-combined", "summary-cpu-actions", "summary-jungo-rescue", "summary-white-rescue", "summary-chinese", "summary-pass-candidate"} {
+		cmd := exec.CommandContext(ctx, exe, "-preview", mode, "-screenshot", filepath.Join(work, "package-v0.7.1-"+mode+".png"))
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		if err = cmd.Run(); err != nil {
 			return fmt.Errorf("package screen %s: %w", mode, err)
 		}
 	}
-	initial, err := measurePreparation(ctx, exe, filepath.Join(work, "preparation-v0.7.0-advice-initial.json"), false)
+	initial, err := measurePreparation(ctx, exe, filepath.Join(work, "preparation-v0.7.1-initial.json"), false)
 	if err != nil {
 		return err
 	}
@@ -89,14 +89,14 @@ func run() (result error) {
 	if err = verifyContents(appDir, true); err != nil {
 		return err
 	}
-	cached, err := measurePreparation(ctx, exe, filepath.Join(work, "preparation-v0.7.0-advice-offline.json"), true)
+	cached, err := measurePreparation(ctx, exe, filepath.Join(work, "preparation-v0.7.1-offline.json"), true)
 	if err != nil {
 		return err
 	}
 	if cached.Downloaded {
 		return errors.New("cached setup attempted model download")
 	}
-	cmd := exec.CommandContext(ctx, exe, "-verify", filepath.Join(root, "..", "codex", "acceptance-v0.7.0-advice.json"))
+	cmd := exec.CommandContext(ctx, exe, "-verify", filepath.Join(root, "..", "codex", "acceptance-v0.7.1.json"))
 	cmd.Env = offlineEnvironment()
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err = cmd.Run(); err != nil {
@@ -121,7 +121,7 @@ func run() (result error) {
 	if err != nil {
 		return err
 	}
-	if err = os.WriteFile(filepath.Join(root, "..", "codex", "preparation-v0.7.0-advice.json"), append(data, '\n'), 0600); err != nil {
+	if err = os.WriteFile(filepath.Join(root, "..", "codex", "preparation-v0.7.1.json"), append(data, '\n'), 0600); err != nil {
 		return err
 	}
 	fmt.Println("package verification passed; pinned model installed, packaged files and source ZIP unchanged")

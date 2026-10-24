@@ -70,8 +70,8 @@ func TestSummaryPagesUseEvidence(t *testing.T) {
 	}
 }
 
-// TestSummaryImprovementUsesCurrentAdvice は概要4ページ目が通常感想戦と同じ手の平易な要約を使うことを検証する。
-func TestSummaryImprovementUsesCurrentAdvice(t *testing.T) {
+// TestSummaryImprovementComparesLegalMoves は実手・候補・手番を示し、着手前の比較図と組み合わせることを検証する。
+func TestSummaryImprovementComparesLegalMoves(t *testing.T) {
 	for _, rule := range []app.Rule{app.Japanese, app.Chinese, app.Jungo} {
 		for _, player := range []app.Color{app.Black, app.White} {
 			g := summaryWindow(t, rule, player)
@@ -80,17 +80,10 @@ func TestSummaryImprovementUsesCurrentAdvice(t *testing.T) {
 			if move == nil {
 				t.Fatal("fixture has no improvement")
 			}
-			before, err := c.Snapshot(move.Turn - 1)
-			if err != nil {
-				t.Fatal(err)
-			}
-			after, err := c.Snapshot(move.Turn)
-			if err != nil {
-				t.Fatal(err)
-			}
-			advice := reviewAdvice(c, move.Turn, before, after)
-			if !strings.Contains(body, advice.summary) || !strings.Contains(advice.summary, "あなたの") || !strings.Contains(body, "結果は確定していません") {
-				t.Fatalf("overview advice differs or lost uncertainty: %s", body)
+			for _, want := range []string{"あなた（", "赤い印・実際の手", "青い印・AI候補", adviceVertex(move.Point, c.Board.Size), adviceVertex(move.Alternative, c.Board.Size), "結果は確定していません"} {
+				if !strings.Contains(body, want) {
+					t.Fatalf("missing comparison evidence %q: %s", want, body)
+				}
 			}
 			d := newSummaryDialog(nil, nil)
 			d.page = 3
@@ -206,10 +199,81 @@ func TestSummaryPreviewScenarios(t *testing.T) {
 func TestSummaryBoardMargins(t *testing.T) {
 	r := image.Rect(655, 225, 1105, 610)
 	for _, size := range []int{7, 9, 11, 13, 15, 19} {
-		x, y, step := overviewGeometry(r.Inset(14), size)
+		x, y, step := overviewGeometry(r.Inset(34), size)
 		radius := step*.46 + 1.5
 		if x-radius < float64(r.Min.X) || y-radius < float64(r.Min.Y) || x+float64(size-1)*step+radius > float64(r.Max.X) || y+float64(size-1)*step+radius > float64(r.Max.Y) {
 			t.Fatal("board marker outside wooden area", size)
 		}
+		if y-radius < float64(r.Min.Y+24) {
+			t.Fatal("top stones overlap coordinate labels", size)
+		}
+	}
+}
+
+// TestSummaryLayoutAndLegalMarkers は戦略ページの横幅・ページ切替・打てない候補の印の抑止を検証する。
+func TestSummaryLayoutAndLegalMarkers(t *testing.T) {
+	g := summaryWindow(t, app.Japanese, app.Black)
+	d := newSummaryDialog(nil, nil)
+	d.page = 1
+	screen := ebiten.NewImage(1180, 800)
+	g.drawSummaryDialog(screen, d)
+	if d.canvas.Bounds().Dx() != 1050 || d.board != nil || len(d.marked) != 0 {
+		t.Fatal("strategy text did not use full width")
+	}
+	d.changePage(2)
+	g.drawSummaryDialog(screen, d)
+	if d.canvas.Bounds().Dx() != 530 || !d.alternativeOK || len(d.board.Moves) != d.move.Turn-1 {
+		t.Fatal("comparison layout or stage changed")
+	}
+	g.controller.SummarySession.Data.Improvement.Alternative = 16
+	d.cachedPage = -1
+	g.drawSummaryDialog(screen, d)
+	if d.alternativeOK {
+		t.Fatal("occupied candidate marked on board")
+	}
+	d.changePage(-3)
+	g.drawSummaryDialog(screen, d)
+	if d.alternativeOK || len(d.board.Moves) != d.move.Turn {
+		t.Fatal("candidate marker leaked to highlight")
+	}
+}
+
+// TestSummaryLessonPreviews は実際の合成棋譜に基づく説明・ルール・対象の一致を検証する。
+func TestSummaryLessonPreviews(t *testing.T) {
+	for _, tc := range []struct {
+		mode, want string
+		rule       app.Rule
+		player     app.Color
+	}{
+		{"summary-rescue", "1か所から3か所", app.Japanese, app.Black},
+		{"summary-compare", "候補で3か所", app.Japanese, app.Black},
+		{"summary-compare-bottom", "空きを増やす手を比べ", app.Japanese, app.Black},
+		{"summary-combined", "今そこへ打てない", app.Japanese, app.Black},
+		{"summary-cpu-actions", "あなたの石を取った手が2回", app.Japanese, app.White},
+		{"summary-jungo-rescue", "2組の黒石", app.Jungo, app.Black},
+		{"summary-white-rescue", "2組の白石", app.Japanese, app.White},
+		{"summary-chinese", "1か所から3か所", app.Chinese, app.Black},
+		{"summary-pass-candidate", "AI候補：パス", app.Japanese, app.Black},
+	} {
+		t.Run(tc.mode, func(t *testing.T) {
+			g := summaryWindow(t, app.Japanese, app.Black)
+			if err := g.prepareSummaryPreview(tc.mode); err != nil {
+				t.Fatal(err)
+			}
+			g.refreshSummaryPage(g.summary)
+			c, d := g.controller, g.summary
+			if c.Board.Rule != tc.rule || c.Player != tc.player || c.Board.Passes != 2 || !strings.Contains(d.body, tc.want) {
+				t.Fatal("fixture does not show required evidence", d.body)
+			}
+			if tc.mode == "summary-cpu-actions" {
+				stage := c.SummarySession.Data.Stages[0]
+				if stage.CaptureMoves != 2 || stage.RescueMoves != 1 || stage.Representative != 7 {
+					t.Fatalf("action frequency was not reproduced: %+v", stage)
+				}
+			}
+			if tc.mode == "summary-compare-bottom" && (d.maxScroll == 0 || d.scroll != d.maxScroll) {
+				t.Fatal("comparison tail not visible")
+			}
+		})
 	}
 }

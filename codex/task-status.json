@@ -1,5 +1,20 @@
 {
-  "updated": "2026-10-19",
+  "updated": "2026-10-24",
+  "summaryClarityVersion": "v0.7.1",
+  "summaryClarityImplementationStatus": "Completed",
+  "summaryClarityTasks": [
+    {"id":"T1","status":"Passed","changedLinesUpperBound":150,"result":"4ページの説明方針と6場面の受入条件をREADMEへ記録。要件・既存実装・代表8画像・指定2サイトの前段分析に基づき内容と参照先を確認。"},
+    {"id":"T2","status":"Passed","changedLinesUpperBound":8000,"result":"CPU行動回数と代表手、履歴を保つ独立局面の一手比較を追加。救出・連結数・同じ対象石・コウ・パス・黒白・棋譜不変の概要テスト Passed。整形時の無関係な改行変換6ファイルは差分なしを確認して復元。上限には1551行の改行変換往復を保守的に6204行として含む。以後は変更ファイルだけ整形する。"},
+    {"id":"T3","status":"Passed","changedLinesUpperBound":1800,"result":"文章生成を描画から分け、4ページを話者・場所・具体的な変化・次の確認へ再構成。実手と候補は同じ元の石で比較し、説明できない理由とコウ・生存の限界も表示。根拠・視点・頻度・欠損を含む概要GUIテスト Passed。"},
+    {"id":"T4","status":"Passed","changedLinesUpperBound":1000,"result":"対象石の枠・取り石位置の×・座標・実手A/候補Bを表示。違法候補の印を抑止し、戦略ページは本文を全幅へ配置。空きの定義を共通表示。型の修正と複合効果の期待値補正後、概要GUIテスト Passed。画像の目視はT5。"},
+    {"id":"T5","status":"Passed","changedLinesUpperBound":1500,"result":"概要30例を生成し代表19例を目視。9つの具体的な棋譜例、CPU行動頻度・パス候補・座標余白の検証を追加。合成棋譜の救出回数を修正し、画像で見つけた上端の重なりを解消。GUI/verifyテスト・preview build Passed。最終凡例を3代表画像で再確認。実入力・別DPI・利用者の理解度評価はNot run。"},
+    {"id":"T6","status":"Passed","changedLinesUpperBound":500,"result":"タイトル・ZIP・検証出力先・最新版のGit許可名・説明書をv0.7.1へ整合。概要の本文と印、88画面の検証手順を更新。静的な版整合とdiff --check Passed。新版測定ファイルの生成と旧ZIP追跡解除はT7。"},
+    {"id":"T7","status":"Passed","result":"長時間の検証をT7a～T7cへ分割し、全て完了。ほかのTaskとは統合していない。","subtasks":[
+      {"id":"T7a","status":"Passed","changedLinesUpperBound":1800,"result":"変更Goファイルのgofmt -lは出力なし。全体vet・test -count=1・build Passed、326テスト・サブテスト成功。任意の実取得・実AI試験3件は通常試験から除外。JSONL記録1352行を含む。並行処理・依存・通信・パーサーの変更がなく、追加race/govulncheckはNot applicable。"},
+      {"id":"T7b","status":"Passed","changedLinesUpperBound":2500,"result":"配布ZIPと88画面を生成。初回実取得・照合と通信制限下の再起動、実CPU96条件・概要6条件 Passed。ZIPと同梱ファイルは検証前後で不変。生成JSON・検証ログ・記録を含む。"},
+      {"id":"T7c","status":"Passed","changedLinesUpperBound":500,"result":"概要30画像はT5と配布版で一致。測定JSON・文書リンク・旧履歴・最終差分を確認。保護ファイル・要件書・旧ZIPのハッシュ不変。旧ZIPは実ファイルを保持して追跡だけ解除。検証用一時データの回収とGitロックなしを確認。詳細はvalidation.md。"}
+    ]}
+  ],
   "adviceClarityVersion": "v0.7.0",
   "adviceClarityImplementationStatus": "Completed",
   "adviceClarityTasks": [

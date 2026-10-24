@@ -1,4 +1,4 @@
-// 作成日: 2026-10-19。概要の合成表示例と実AI受入測定。合成例は保存せず、実測は専用の一時プロフィールだけを使う。
+// 作成日: 2026-10-19。更新日: 2026-10-24。概要の合成表示例と実AI受入測定。合成例は保存せず、実測は専用の一時プロフィールだけを使う。
 package gui
 
 import (
@@ -15,6 +15,10 @@ import (
 // prepareSummaryPreview は4ページ・全路数・白視点・純碁・解析失敗・長文を明示した合成データで作る。
 func (g *window) prepareSummaryPreview(mode string) error {
 	page, ok := map[string]int{"summary-1": 0, "summary-2": 1, "summary-3": 2, "summary-4": 3, "summary-wait": 0, "summary-error": 3, "summary-missing": 2, "summary-white": 2, "summary-jungo": 0, "summary-draw": 0, "summary-empty": 0, "summary-noresult": 0, "summary-long": 1, "summary-bottom": 1, "summary-min": 3, "summary-7": 3, "summary-9": 3, "summary-11": 3, "summary-13": 3, "summary-15": 3, "summary-19": 3}[mode]
+	lessonPage, lesson := map[string]int{"summary-rescue": 2, "summary-compare": 3, "summary-compare-bottom": 3, "summary-combined": 0, "summary-cpu-actions": 1, "summary-jungo-rescue": 2, "summary-white-rescue": 2, "summary-chinese": 2, "summary-pass-candidate": 3}[mode]
+	if lesson {
+		page, ok = lessonPage, true
+	}
 	if !ok {
 		return errors.New("unknown summary preview mode")
 	}
@@ -23,8 +27,10 @@ func (g *window) prepareSummaryPreview(mode string) error {
 		size = n
 	}
 	rule := app.Japanese
-	if mode == "summary-jungo" || mode == "summary-draw" {
+	if mode == "summary-jungo" || mode == "summary-draw" || mode == "summary-jungo-rescue" {
 		rule = app.Jungo
+	} else if mode == "summary-chinese" {
+		rule = app.Chinese
 	}
 	b, err := app.NewBoard(size, rule)
 	if err != nil {
@@ -36,23 +42,65 @@ func (g *window) prepareSummaryPreview(mode string) error {
 	} else if mode == "summary-empty" {
 		points = nil
 	}
+	switch mode {
+	case "summary-rescue", "summary-jungo-rescue", "summary-chinese", "summary-pass-candidate":
+		points = []int{0, 1, size * 2, size*size - 1, size}
+	case "summary-compare", "summary-compare-bottom":
+		points = []int{0, 1, size * 2, size*size - 1, size*size - 3}
+	case "summary-combined":
+		points = []int{2, 1, size + 1, size, 0}
+	case "summary-white-rescue":
+		points = []int{size*size - 1, 0, 1, size * 2, size*size - 2, size}
+	case "summary-cpu-actions":
+		points = []int{0, 1, size, size*size - 1, 2, size*size - 2, size + 1, size*size - 3, 4, 5, 6, size*size - 4, size + 5}
+	}
 	for _, point := range points {
 		if err = b.Play(point); err != nil {
 			return err
 		}
 	}
-	c := &app.Controller{Phase: app.Summary, Board: b, Player: app.Black, Settings: app.DefaultSettings(), Evaluations: make([]*engine.Analysis, len(points)+1)}
+	if mode == "summary-cpu-actions" {
+		for point := 0; point < size*size && len(b.Moves) < 37; point++ {
+			if b.Legal(point) {
+				if err = b.Play(point); err != nil {
+					return err
+				}
+			}
+		}
+		if len(b.Moves) != 37 {
+			return errors.New("summary action fixture is too short")
+		}
+	}
+	focusTurn := len(b.Moves)
+	if lesson {
+		for range 2 {
+			if err = b.Play(-1); err != nil {
+				return err
+			}
+		}
+	}
+	c := &app.Controller{Phase: app.Summary, Board: b, Player: app.Black, Settings: app.DefaultSettings(), Evaluations: make([]*engine.Analysis, len(b.Moves)+1)}
 	c.Settings.Rule, c.Settings.Size = rule, size
-	if mode == "summary-white" {
+	if mode == "summary-white" || mode == "summary-white-rescue" || mode == "summary-cpu-actions" {
 		c.Player = app.White
 	}
 	for i := range c.Evaluations {
-		value := []float64{0, 0, 0, -4, -2, -2, -1, -1, -1}[i]
+		value := []float64{0, 0, 0, -4, -2, -2, -1, -1, -1}[min(i, 8)]
 		c.Evaluations[i] = &engine.Analysis{ScoreLead: value, Winrate: .5 + value/100, Moves: []engine.Candidate{{Point: size*size - 9, Visits: 32}}}
 	}
 	if len(points) > 2 {
 		c.Evaluations[0].Moves[0].Point = points[0]
 		c.Evaluations[1].Moves[0].Point = points[1]
+	}
+	if lesson {
+		point := b.Moves[focusTurn-1].Point
+		switch mode {
+		case "summary-compare", "summary-compare-bottom":
+			point = size
+		case "summary-pass-candidate":
+			point = -1
+		}
+		c.Evaluations[focusTurn-1].Moves[0].Point = point
 	}
 	if mode == "summary-missing" || mode == "summary-wait" {
 		c.Evaluations = make([]*engine.Analysis, len(points)+1)
@@ -60,6 +108,18 @@ func (g *window) prepareSummaryPreview(mode string) error {
 	data, err := app.BuildGameSummary(b, c.Player, c.Evaluations)
 	if err != nil {
 		return err
+	}
+	if lesson && mode != "summary-cpu-actions" {
+		// 合成例は説明対象を固定し、選定順位の試験とは分ける。効果・合法性は実際の棋譜から計算する。
+		m := &data.Moves[focusTurn-1]
+		switch page {
+		case 0:
+			data.Highlight = m
+		case 2:
+			data.GoodMove = m
+		case 3:
+			data.Improvement = m
+		}
 	}
 	c.SummarySession = &app.SummarySession{Data: data, Ready: mode != "summary-wait"}
 	if mode == "summary-wait" {
@@ -90,11 +150,15 @@ func (g *window) prepareSummaryPreview(mode string) error {
 		g.refreshSummaryPage(g.summary)
 		d := g.summary
 		d.body = strings.Repeat(d.body+"\n\n", 4) + "長文の末尾まで確認できました。"
-		d.lines = g.wrapLines(d.body, 510, 20)
+		d.lines = g.wrapLines(d.body, 1020, 20)
 		d.maxScroll = math.Max(0, float64(len(d.lines)*30-450))
 		if mode == "summary-bottom" {
 			d.scroll = d.maxScroll
 		}
+	}
+	if mode == "summary-compare-bottom" {
+		g.refreshSummaryPage(g.summary)
+		g.summary.scroll = g.summary.maxScroll
 	}
 	return nil
 }
@@ -102,6 +166,7 @@ func (g *window) prepareSummaryPreview(mode string) error {
 // summaryPreviewModes は配布検査にも記載する固定の画面例を返す。
 func summaryPreviewModes() []string {
 	modes := []string{"summary-1", "summary-2", "summary-3", "summary-4", "summary-wait", "summary-error", "summary-missing", "summary-white", "summary-jungo", "summary-draw", "summary-empty", "summary-noresult", "summary-long", "summary-bottom", "summary-min"}
+	modes = append(modes, "summary-rescue", "summary-compare", "summary-compare-bottom", "summary-combined", "summary-cpu-actions", "summary-jungo-rescue", "summary-white-rescue", "summary-chinese", "summary-pass-candidate")
 	for _, size := range []int{7, 9, 11, 13, 15, 19} {
 		modes = append(modes, fmt.Sprintf("summary-%d", size))
 	}
