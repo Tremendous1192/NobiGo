@@ -194,7 +194,7 @@ func TestProfileParserBoundaries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cases := [][]byte{append(append([]byte(nil), data...), []byte(" {}")...), bytes.Replace(data, []byte(`"version":1`), []byte(`"extra":true,"version":1`), 1), bytes.Replace(data, []byte(`"ranks":[0,0,0]`), []byte(`"ranks":[0,0,0,0]`), 1), bytes.Repeat([]byte(" "), maxProfileBytes+1)}
+	cases := [][]byte{append(append([]byte(nil), data...), []byte(" {}")...), bytes.Replace(data, []byte(`"version":`), []byte(`"extra":true,"version":`), 1), bytes.Replace(data, []byte(`"ranks":[0,0,0]`), []byte(`"ranks":[0,0,0,0]`), 1), bytes.Repeat([]byte(" "), maxProfileBytes+1)}
 	for i, input := range cases {
 		if _, err := decodeProfile(input, p.ID); err == nil {
 			t.Fatalf("accepted invalid input %d", i)

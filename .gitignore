@@ -1,7 +1,7 @@
 /.cache/
 /.work/
 /dist/*
-!/dist/NobiGo-v0.7.1-windows-amd64.zip
+!/dist/NobiGo-v0.8.0-windows-amd64.zip
 *.sha256
 /src/profile/*
 !/src/profile/.gitkeep

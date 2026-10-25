@@ -52,6 +52,12 @@ func TestSummaryPagesUseEvidence(t *testing.T) {
 				}
 				continue
 			}
+			if page == 3 {
+				if d.lesson != nil || !strings.Contains(d.body, "今回は紹介できる場面が見つかりませんでした") {
+					t.Fatal("invented technique")
+				}
+				continue
+			}
 			if d.board == nil {
 				t.Fatal("missing selected board")
 			}
@@ -70,17 +76,20 @@ func TestSummaryPagesUseEvidence(t *testing.T) {
 	}
 }
 
-// TestSummaryImprovementComparesLegalMoves は実手・候補・手番を示し、着手前の比較図と組み合わせることを検証する。
-func TestSummaryImprovementComparesLegalMoves(t *testing.T) {
+// TestSummaryTechniqueUsesLegalMoves は手番・合法な教材手順・着手前の図が対応することを検証する。
+func TestSummaryTechniqueUsesLegalMoves(t *testing.T) {
 	for _, rule := range []app.Rule{app.Japanese, app.Chinese, app.Jungo} {
 		for _, player := range []app.Color{app.Black, app.White} {
 			g := summaryWindow(t, rule, player)
-			c := g.controller
-			_, body, move := summaryPageContent(c, 3)
-			if move == nil {
-				t.Fatal("fixture has no improvement")
+			if err := g.prepareTechniquePreview(app.TechniqueSnapback); err != nil {
+				t.Fatal(err)
 			}
-			for _, want := range []string{"あなた（", "赤い印・実際の手", "青い印・AI候補", adviceVertex(move.Point, c.Board.Size), adviceVertex(move.Alternative, c.Board.Size), "結果は確定していません"} {
+			c := g.controller
+			c.Player = player
+			c.Board.Rule = rule
+			_, body, _ := summaryPageContent(c, 3)
+			move := c.Technique
+			for _, want := range []string{summaryActor(c, move.Color), "相手が取った場合", adviceVertex(move.Line[0], c.Board.Size), "仮想手順"} {
 				if !strings.Contains(body, want) {
 					t.Fatalf("missing comparison evidence %q: %s", want, body)
 				}
@@ -179,8 +188,8 @@ func TestSummaryPreviewScenarios(t *testing.T) {
 				t.Fatal("preview lost isolation")
 			}
 			g.drawSummaryDialog(ebiten.NewImage(1180, 800), g.summary)
-			if mode == "summary-4" && (g.summary.board == nil || len(g.summary.board.Moves) != 2) {
-				t.Fatal("improvement preview has wrong position")
+			if mode == "summary-4" && (g.summary.board == nil || g.summary.lesson == nil || len(g.summary.board.Moves) != g.summary.lesson.Turn-1) {
+				t.Fatal("technique preview has wrong position")
 			}
 			if mode == "summary-bottom" && g.summary.scroll != g.summary.maxScroll {
 				t.Fatal("long text lost end")
@@ -213,6 +222,9 @@ func TestSummaryBoardMargins(t *testing.T) {
 // TestSummaryLayoutAndLegalMarkers は戦略ページの横幅・ページ切替・打てない候補の印の抑止を検証する。
 func TestSummaryLayoutAndLegalMarkers(t *testing.T) {
 	g := summaryWindow(t, app.Japanese, app.Black)
+	if err := g.prepareSummaryPreview("summary-compare"); err != nil {
+		t.Fatal(err)
+	}
 	d := newSummaryDialog(nil, nil)
 	d.page = 1
 	screen := ebiten.NewImage(1180, 800)
@@ -222,14 +234,13 @@ func TestSummaryLayoutAndLegalMarkers(t *testing.T) {
 	}
 	d.changePage(2)
 	g.drawSummaryDialog(screen, d)
-	if d.canvas.Bounds().Dx() != 530 || !d.alternativeOK || len(d.board.Moves) != d.move.Turn-1 {
-		t.Fatal("comparison layout or stage changed")
+	if d.canvas.Bounds().Dx() != 530 || d.alternativeOK || d.lesson == nil || len(d.board.Moves) != d.lesson.Turn-1 {
+		t.Fatal("technique layout or stage changed")
 	}
-	g.controller.SummarySession.Data.Improvement.Alternative = 16
-	d.cachedPage = -1
+	d.changeTechniqueStep(1)
 	g.drawSummaryDialog(screen, d)
-	if d.alternativeOK {
-		t.Fatal("occupied candidate marked on board")
+	if d.techniqueStep != 1 || len(d.board.Moves) != d.lesson.Turn {
+		t.Fatal("technique did not advance")
 	}
 	d.changePage(-3)
 	g.drawSummaryDialog(screen, d)
@@ -246,14 +257,14 @@ func TestSummaryLessonPreviews(t *testing.T) {
 		player     app.Color
 	}{
 		{"summary-rescue", "1か所から3か所", app.Japanese, app.Black},
-		{"summary-compare", "候補で3か所", app.Japanese, app.Black},
-		{"summary-compare-bottom", "空きを増やす手を比べ", app.Japanese, app.Black},
+		{"summary-compare", "空きが3か所", app.Japanese, app.Black},
+		{"summary-compare-bottom", "周りの石まで確認", app.Japanese, app.Black},
 		{"summary-combined", "今そこへ打てない", app.Japanese, app.Black},
 		{"summary-cpu-actions", "あなたの石を取った手が2回", app.Japanese, app.White},
 		{"summary-jungo-rescue", "2組の黒石", app.Jungo, app.Black},
 		{"summary-white-rescue", "2組の白石", app.Japanese, app.White},
 		{"summary-chinese", "1か所から3か所", app.Chinese, app.Black},
-		{"summary-pass-candidate", "AI候補：パス", app.Japanese, app.Black},
+		{"summary-pass-candidate", "アタリでした", app.Japanese, app.Black},
 	} {
 		t.Run(tc.mode, func(t *testing.T) {
 			g := summaryWindow(t, app.Japanese, app.Black)
@@ -271,8 +282,8 @@ func TestSummaryLessonPreviews(t *testing.T) {
 					t.Fatalf("action frequency was not reproduced: %+v", stage)
 				}
 			}
-			if tc.mode == "summary-compare-bottom" && (d.maxScroll == 0 || d.scroll != d.maxScroll) {
-				t.Fatal("comparison tail not visible")
+			if tc.mode == "summary-compare-bottom" && d.scroll != d.maxScroll {
+				t.Fatal("technique tail not visible")
 			}
 		})
 	}

@@ -1,0 +1,18 @@
+{
+  "version": "v0.8.0",
+  "date": "2026-10-25",
+  "tasks": [
+    {"id": "T1", "name": "要件書の最小修正", "status": "Passed", "evidence": "概要4ページ目だけに承認済み仕様を追記"},
+    {"id": "T2", "name": "技術の定義と候補抽出", "status": "Passed", "evidence": "8識別子・基本技術・紹介順位を実装。test -count=1 -run Technique ./internal/app成功。整形による既存6ファイルの改行だけの変更は内容一致を確認して復元"},
+    {"id": "T3", "name": "複数手の確認", "status": "Passed", "evidence": "対象石群ごとに最大8192ノード・64手、ゲタは初手後9手まで。シチョウアタリ、逃走、共有呼吸点、コウ、取消・上限を含むTechniqueテスト成功。最終確認で盤全体の守りの応手と短い直接捕獲の除外も検証"},
+    {"id": "T4", "name": "概要解析へ統合", "status": "Passed", "evidence": "単一作業・同じ60秒期限に教材探索を追加。最大64候補・結果16件。全appテスト成功。非同期完了を待つ検証へ更新"},
+    {"id": "T5", "name": "履歴保存と旧形式移行", "status": "Passed", "evidence": "v1読込み・v2保存・上書きしない.v1.bak、冪等な紹介保存、失敗・競合・プレイヤー分離・JSON境界を含むappテスト成功"},
+    {"id": "T6", "name": "紹介画面と保存を接続", "status": "Passed", "evidence": "8教材・仮想手順往復・候補なし・再紹介・保存失敗を表示。GUIテスト成功、EXEビルド成功。ウッテガエシ・シチョウ・最小画面を目視確認"},
+    {"id": "T7", "name": "版・説明・配布設定を更新", "status": "Passed", "evidence": "v0.8.0へ版番号・ZIP名・検証出力・Git許可名を更新。教材操作、探索の限界、紹介保存とv1復旧をREADMEに記載。配布検証は最終手順2例を含む102画面"},
+    {"id": "T8", "name": "回帰・性能・配布検証", "status": "Passed", "steps": [
+      {"id": "T8a", "name": "全体回帰", "status": "Passed", "evidence": "367テスト・サブテスト、vet・build・全体race成功。最終GUI変更のraceも成功。govulncheckの到達可能な脆弱性0件"},
+      {"id": "T8b", "name": "配布・実測", "status": "Passed", "evidence": "21,032,911 bytesのZIP、102画面生成・代表14画面目視。初回取得・通信制限下の実測成功。CPU96/96条件で最大3724ms、概要6/6条件で最大33610ms。候補あり3条件で履歴保存、残り3条件は候補なし。全ハッシュ一致・専用展開先回収済み"},
+      {"id": "T8c", "name": "最終確認・記録", "status": "Passed", "evidence": "差分・整形・JSON・READMEリンク・範囲を確認。旧ZIPはdry run後に追跡だけ解除し、元のハッシュを維持。要件書改版・旧記録を保持。Git操作完了後のindex.lockなし。検証範囲と復旧方法はvalidation.mdとREADMEに記録"}
+    ]}
+  ]
+}

@@ -36,8 +36,12 @@ func TestSummaryExplainsRescueAndJoinedGroups(t *testing.T) {
 // TestSummaryExplainsAlternativeForSameStone は実手で危険なままの石を候補が助ける一手の違いを説明することを検証する。
 func TestSummaryExplainsAlternativeForSameStone(t *testing.T) {
 	c := summaryTextFixture(t, []int{0, 1, 14, 48, 40}, 7)
-	_, body, _ := summaryPageContent(c, 3)
-	for _, want := range []string{"赤い印・実際の手", "青い印・AI候補", "A7", "黒石1個", "実際の手で1か所", "候補で3か所", "空きを増やす手を比べ", "結果は確定していません"} {
+	scene, err := makeSummaryScene(c, c.SummarySession.Data.Improvement)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := summaryComparisonText(scene)
+	for _, want := range []string{"A7", "黒石1個", "実際の手で1か所", "候補で3か所", "空きを増やす手を比べ"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("missing comparison %q: %s", want, body)
 		}
@@ -61,18 +65,26 @@ func TestSummaryExplainsCombinedDanger(t *testing.T) {
 // TestSummaryDoesNotInventCandidateReason は局所差でAIの理由を説明できない場合に限界を伝えることを検証する。
 func TestSummaryDoesNotInventCandidateReason(t *testing.T) {
 	c := summaryTextFixture(t, []int{16, 0, 24}, 40)
-	_, body, _ := summaryPageContent(c, 3)
+	scene, err := makeSummaryScene(c, c.SummarySession.Data.Improvement)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := summaryComparisonText(scene)
 	if !strings.Contains(body, "AIが候補を選んだ理由を説明できません") || strings.Contains(body, "候補なら勝") {
 		t.Fatal(body)
 	}
 	c.SummarySession.Data.Improvement.Alternative = 16
-	_, body, _ = summaryPageContent(c, 3)
-	if !strings.Contains(body, "合法に再現できない") || strings.Contains(body, "青い印・AI候補") {
-		t.Fatal("illegal alternative was explained", body)
+	scene, err = makeSummaryScene(c, c.SummarySession.Data.Improvement)
+	if err != nil || scene.alternative != nil {
+		t.Fatal("illegal alternative was accepted", err)
 	}
 	c.SummarySession.Data.Improvement.Alternative = -1
-	_, body, _ = summaryPageContent(c, 3)
-	if !strings.Contains(body, "AI候補：パス") || !strings.Contains(body, "次局はパスの前に") || strings.Contains(body, "青い印") {
+	scene, err = makeSummaryScene(c, c.SummarySession.Data.Improvement)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body = summaryComparisonText(scene)
+	if !strings.Contains(body, "次局はパスの前に") || strings.Contains(body, "青い印") {
 		t.Fatal("pass candidate refers to a board marker", body)
 	}
 }
@@ -107,7 +119,11 @@ func TestSummaryRulePerspectiveAndMissingEvidence(t *testing.T) {
 	c.SummarySession.Data = app.GameSummary{}
 	for _, page := range []int{0, 2, 3} {
 		_, body, move := summaryPageContent(c, page)
-		if move != nil || !strings.Contains(body, "揃っていません") || strings.Contains(body, "損失は0") {
+		missing := "揃っていません"
+		if page == 3 {
+			missing = "今回は紹介できる場面が見つかりませんでした"
+		}
+		if move != nil || !strings.Contains(body, missing) || strings.Contains(body, "損失は0") {
 			t.Fatal("missing evidence was judged", body)
 		}
 	}

@@ -18,7 +18,7 @@ import (
 	"unicode/utf8"
 )
 
-const ProfileVersion = 1
+const ProfileVersion = 2
 const MaxResults = 1000
 const maxProfileBytes = 4 << 20
 
@@ -49,17 +49,19 @@ type GameResult struct {
 	FinishedAt string   `json:"finishedAt"`
 }
 type Profile struct {
-	Version     int          `json:"version"`
-	ID          string       `json:"id"`
-	Name        string       `json:"name"`
-	Revision    uint64       `json:"revision"`
-	Ranks       [3]float64   `json:"ranks"`
-	Last        Settings     `json:"last"`
-	GamesPlayed int          `json:"gamesPlayed"`
-	Wins        int          `json:"wins"`
-	Draws       int          `json:"draws"`
-	Results     []GameResult `json:"results"`
-	Adjustments []Adjustment `json:"adjustments"`
+	Version           int               `json:"version"`
+	ID                string            `json:"id"`
+	Name              string            `json:"name"`
+	Revision          uint64            `json:"revision"`
+	Ranks             [3]float64        `json:"ranks"`
+	Last              Settings          `json:"last"`
+	GamesPlayed       int               `json:"gamesPlayed"`
+	Wins              int               `json:"wins"`
+	Draws             int               `json:"draws"`
+	Results           []GameResult      `json:"results"`
+	Adjustments       []Adjustment      `json:"adjustments"`
+	Techniques        []TechniqueRecord `json:"techniques,omitempty"`
+	LastTechniqueGame string            `json:"lastTechniqueGame,omitempty"`
 }
 
 // DefaultSettings は初心者用の初期設定を返す。
@@ -115,7 +117,7 @@ func finiteRange(n, low, high float64) bool {
 
 // Validate は保存形式の境界を検査する。resultsとadjustmentsのnull・省略は空履歴として扱う。
 func (p Profile) Validate() error {
-	if p.Version != ProfileVersion || !validID(p.ID) || p.Revision < 1 {
+	if (p.Version != 1 && p.Version != ProfileVersion) || !validID(p.ID) || p.Revision < 1 {
 		return errors.New("unsupported profile version or invalid id/revision")
 	}
 	if err := validateName(p.Name); err != nil {
@@ -146,6 +148,9 @@ func (p Profile) Validate() error {
 			return errors.New("invalid adjustment")
 		}
 		settings[s] = true
+	}
+	if err := p.validateTechniques(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -326,6 +331,25 @@ func (s *Store) write(p Profile) error {
 	}
 	old, err := readBounded(path)
 	if err == nil {
+		previous, decodeErr := decodeProfile(old, p.ID)
+		if decodeErr != nil {
+			return decodeErr
+		}
+		if previous.Version == 1 && p.Version == ProfileVersion {
+			migration, _ := s.path(p.ID, ".v1.bak")
+			if saved, readErr := readBounded(migration); readErr == nil {
+				original, checkErr := decodeProfile(saved, p.ID)
+				if checkErr != nil || original.Version != 1 {
+					return errors.New("invalid migration backup")
+				}
+			} else if errors.Is(readErr, os.ErrNotExist) {
+				if err = atomicWrite(migration, old, os.Rename); err != nil {
+					return err
+				}
+			} else {
+				return readErr
+			}
+		}
 		backup, _ := s.path(p.ID, ".bak")
 		if err = atomicWrite(backup, old, os.Rename); err != nil {
 			return err
@@ -371,7 +395,11 @@ func (s *Store) Save(p *Profile) error {
 	if p == nil {
 		return errors.New("nil profile")
 	}
+	if err := p.Validate(); err != nil {
+		return err
+	}
 	copy := *p
+	copy.Version = ProfileVersion
 	err := s.locked(func() error {
 		current, err := s.Load(copy.ID)
 		if err != nil {
@@ -391,6 +419,7 @@ func (s *Store) Save(p *Profile) error {
 	})
 	if err == nil {
 		p.Revision = copy.Revision
+		p.Version = copy.Version
 	}
 	return err
 }

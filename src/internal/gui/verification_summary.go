@@ -2,6 +2,7 @@
 package gui
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -14,6 +15,9 @@ import (
 
 // prepareSummaryPreview は4ページ・全路数・白視点・純碁・解析失敗・長文を明示した合成データで作る。
 func (g *window) prepareSummaryPreview(mode string) error {
+	if id := techniquePreviewID(mode); id != "" {
+		return g.prepareTechniquePreview(id)
+	}
 	page, ok := map[string]int{"summary-1": 0, "summary-2": 1, "summary-3": 2, "summary-4": 3, "summary-wait": 0, "summary-error": 3, "summary-missing": 2, "summary-white": 2, "summary-jungo": 0, "summary-draw": 0, "summary-empty": 0, "summary-noresult": 0, "summary-long": 1, "summary-bottom": 1, "summary-min": 3, "summary-7": 3, "summary-9": 3, "summary-11": 3, "summary-13": 3, "summary-15": 3, "summary-19": 3}[mode]
 	lessonPage, lesson := map[string]int{"summary-rescue": 2, "summary-compare": 3, "summary-compare-bottom": 3, "summary-combined": 0, "summary-cpu-actions": 1, "summary-jungo-rescue": 2, "summary-white-rescue": 2, "summary-chinese": 2, "summary-pass-candidate": 3}[mode]
 	if lesson {
@@ -37,6 +41,9 @@ func (g *window) prepareSummaryPreview(mode string) error {
 		return err
 	}
 	points := []int{size*2 + 2, 0, size*3 + 3, 1, size*4 + 4, 2, -1, -1}
+	if page == 3 {
+		points = []int{0, 1, size * 2, size*size - 1, size, -1, -1}
+	}
 	if mode == "summary-draw" {
 		points = []int{-1, -1}
 	} else if mode == "summary-empty" {
@@ -122,6 +129,12 @@ func (g *window) prepareSummaryPreview(mode string) error {
 		}
 	}
 	c.SummarySession = &app.SummarySession{Data: data, Ready: mode != "summary-wait"}
+	if c.SummarySession.Ready {
+		c.SummarySession.Lessons, err = app.FindGameTechniques(context.Background(), b, c.Evaluations)
+		if err != nil {
+			return err
+		}
+	}
 	if mode == "summary-wait" {
 		c.SummarySession.Total = 8
 		c.SummarySession.Completed = 2
@@ -170,19 +183,26 @@ func summaryPreviewModes() []string {
 	for _, size := range []int{7, 9, 11, 13, 15, 19} {
 		modes = append(modes, fmt.Sprintf("summary-%d", size))
 	}
+	for _, id := range app.TechniqueIDs() {
+		modes = append(modes, "summary-technique-"+string(id))
+	}
+	modes = append(modes, "summary-technique-none", "summary-technique-repeat", "summary-technique-save-error", "summary-technique-wait", "summary-technique-ladder-end", "summary-technique-snapback-end")
 	return modes
 }
 
 // summaryAcceptanceCase は実CPUの概要生成と、その直後のCPU先手の描画時間を記録する。
 type summaryAcceptanceCase struct {
-	Rule                app.Rule `json:"rule"`
-	Size                int      `json:"size"`
-	Positions           int      `json:"positions"`
-	EvaluatedMoves      int      `json:"evaluatedMoves"`
-	Milliseconds        int64    `json:"milliseconds"`
-	NextCPUMilliseconds int64    `json:"nextCPUMilliseconds"`
-	Passed              bool     `json:"passed"`
-	Error               string   `json:"error,omitempty"`
+	Rule                  app.Rule        `json:"rule"`
+	Size                  int             `json:"size"`
+	Positions             int             `json:"positions"`
+	EvaluatedMoves        int             `json:"evaluatedMoves"`
+	Milliseconds          int64           `json:"milliseconds"`
+	NextCPUMilliseconds   int64           `json:"nextCPUMilliseconds"`
+	Passed                bool            `json:"passed"`
+	Error                 string          `json:"error,omitempty"`
+	Technique             app.TechniqueID `json:"technique,omitempty"`
+	TechniqueSteps        int             `json:"techniqueSteps,omitempty"`
+	TechniqueHistorySaved bool            `json:"techniqueHistorySaved"`
 }
 
 // updateSummaryVerification は専用プロフィールで概要を表示し、終了直後の次局をDrawまで測る。
@@ -239,6 +259,29 @@ func (g *window) updateSummaryVerification() error {
 		current.EvaluatedMoves = s.Data.Evaluated
 		if s.Err != nil || s.Data.Evaluated == 0 || s.Completed != s.Total || s.Total > app.MaxSummaryPositions || current.Milliseconds > app.SummaryTimeLimit.Milliseconds() {
 			return fail("summary analysis acceptance failed")
+		}
+		g.summary.changePage(3)
+		v.summaryDrawn = false
+		v.summaryStage = 3
+	case 3:
+		if !v.summaryDrawn {
+			return nil
+		}
+		current.Milliseconds = time.Since(v.summaryBegan).Milliseconds()
+		if g.summary.saveFailed || current.Milliseconds > app.SummaryTimeLimit.Milliseconds() {
+			return fail("technique display or history save failed")
+		}
+		if m := c.Technique; m != nil {
+			current.Technique = m.ID
+			current.TechniqueSteps = len(m.Line)
+			for _, r := range c.Profile.Techniques {
+				if r.ID == m.ID && r.Count > 0 {
+					current.TechniqueHistorySaved = true
+				}
+			}
+			if !current.TechniqueHistorySaved {
+				return fail("technique history was not saved")
+			}
 		}
 		g.finishSummary()
 		c.Settings.Side = 1

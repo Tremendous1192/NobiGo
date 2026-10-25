@@ -36,34 +36,40 @@ type progressAnalyzer interface {
 	AnalyzeProgress(context.Context, engine.Position, func(engine.Analysis)) (engine.Analysis, error)
 }
 type analysisJob struct {
-	ctx      context.Context
-	id       uint64
-	turn     int
-	position engine.Position
+	ctx                  context.Context
+	id                   uint64
+	turn                 int
+	position             engine.Position
+	techniqueBoard       *Board
+	techniqueEvaluations []*engine.Analysis
 }
 type analysisResult struct {
-	id       uint64
-	turn     int
-	analysis engine.Analysis
-	err      error
+	id        uint64
+	turn      int
+	analysis  engine.Analysis
+	err       error
+	technique bool
+	lessons   []TechniqueLesson
 }
 
 // Controller はUIスレッド専用。Closeだけは停止完了を待ち、解析器自体のCloseは生成側が担当する。
 type Controller struct {
-	Phase           Phase
-	Board           *Board
-	Player          Color
-	Profile         Profile
-	Settings        Settings
-	Strength        float64
-	Evaluations     []*engine.Analysis
-	Score           Score
-	Err             error
-	Busy            bool
-	UndoCount       int
-	LastCPUTime     time.Duration
-	CPUDeadlineMiss bool
-	SummarySession  *SummarySession
+	Phase             Phase
+	Board             *Board
+	Player            Color
+	Profile           Profile
+	Settings          Settings
+	Strength          float64
+	Evaluations       []*engine.Analysis
+	Score             Score
+	Err               error
+	Busy              bool
+	UndoCount         int
+	LastCPUTime       time.Duration
+	CPUDeadlineMiss   bool
+	SummarySession    *SummarySession
+	Technique         *TechniqueLesson
+	techniqueRecorded bool
 
 	store           *Store
 	rng             *rand.Rand
@@ -103,15 +109,18 @@ func (c *Controller) work(ctx context.Context, backend Analyzer) {
 			return
 		case job := <-c.jobs:
 			var a engine.Analysis
+			var lessons []TechniqueLesson
 			err := job.ctx.Err()
 			if err == nil {
-				if progressive, ok := backend.(progressAnalyzer); ok {
+				if job.techniqueBoard != nil {
+					lessons, err = FindGameTechniques(job.ctx, job.techniqueBoard, job.techniqueEvaluations)
+				} else if progressive, ok := backend.(progressAnalyzer); ok {
 					a, err = progressive.AnalyzeProgress(job.ctx, job.position, func(a engine.Analysis) { c.publishProgress(job, a) })
 				} else {
 					a, err = backend.Analyze(job.ctx, job.position)
 				}
 			}
-			r := analysisResult{job.id, job.turn, a, err}
+			r := analysisResult{id: job.id, turn: job.turn, analysis: a, err: err, technique: job.techniqueBoard != nil, lessons: lessons}
 			// 期限切れもUIへ通知する。古い未読結果だけを捨て、Busyが残ることを防ぐ。
 			select {
 			case c.results <- r:
@@ -179,7 +188,7 @@ func (c *Controller) requestPosition(b *Board, turn int) {
 	c.Err = nil
 	position := EnginePosition(b)
 	position.Review = c.Phase == Review
-	c.jobs <- analysisJob{ctx, c.generation, turn, position}
+	c.jobs <- analysisJob{ctx: ctx, id: c.generation, turn: turn, position: position}
 }
 
 // Start は設定保存の成功後に新規対局を開始し、強度を固定する。
@@ -216,6 +225,8 @@ func (c *Controller) Start(p Profile, s Settings) error {
 	c.UndoCount = 0
 	c.Score = Score{}
 	c.SummarySession = nil
+	c.Technique = nil
+	c.techniqueRecorded = false
 	c.Phase = Playing
 	c.LastCPUTime = 0
 	c.CPUDeadlineMiss = false
@@ -277,6 +288,14 @@ func (c *Controller) Poll() {
 		if c.cancel != nil {
 			c.cancel()
 			c.cancel = nil
+		}
+		if r.technique && c.Phase == Summary {
+			s := c.SummarySession
+			s.Lessons = r.lessons
+			s.Err = errors.Join(s.Err, r.err)
+			s.Ready = true
+			s.Elapsed = time.Since(s.began)
+			return
 		}
 		if r.err != nil {
 			if c.Phase == Summary {

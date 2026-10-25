@@ -25,6 +25,11 @@ type summaryDialog struct {
 	move                      *app.SummaryMove
 	marked                    []int
 	alternativeOK             bool
+	lesson                    *app.TechniqueLesson
+	techniqueStep             int
+	cachedTechniqueStep       int
+	techniquePresented        bool
+	saveAttempted, saveFailed bool
 	close, retry              func()
 }
 
@@ -67,6 +72,10 @@ func (g *window) refreshSummaryPage(d *summaryDialog) {
 	c := g.controller
 	s := c.SummarySession
 	if d.cachedPage == d.page && d.source == s && d.ready == s.Ready {
+		if d.page == 3 && d.cachedTechniqueStep != d.techniqueStep {
+			refreshTechniqueBoard(c, d)
+			d.cachedTechniqueStep = d.techniqueStep
+		}
 		return
 	}
 	d.cachedPage, d.source, d.ready = d.page, s, s.Ready
@@ -81,6 +90,13 @@ func (g *window) refreshSummaryPage(d *summaryDialog) {
 	d.board = nil
 	d.marked = nil
 	d.alternativeOK = false
+	d.lesson = nil
+	if d.page == 3 {
+		d.lesson = c.ChooseTechnique()
+		refreshTechniqueBoard(c, d)
+		d.cachedTechniqueStep = d.techniqueStep
+		return
+	}
 	if d.move != nil {
 		stage := "着手後"
 		scene, err := makeSummaryScene(c, d.move)
@@ -133,6 +149,9 @@ func (g *window) drawSummaryDialog(screen *ebiten.Image, d *summaryDialog) {
 	} else if s.Err != nil {
 		status = "追加解析を完了できませんでした。取得済みの範囲を表示しています。"
 	}
+	if d.page == 3 && s.Ready && s.Err == nil {
+		status = "今回の棋譜から選んだ教材 · 紹介は1局につき1種類"
+	}
 	g.label(screen, status, 65, 125, 17, muted)
 	hint := "空き＝ひとまとまりの石の上下左右に接する空いた交点。"
 	if g.controller.Board.Rule == app.Jungo {
@@ -168,7 +187,13 @@ func (g *window) drawSummaryDialog(screen *ebiten.Image, d *summaryDialog) {
 	g.button(screen, image.Rect(270, 695, 350, 737), "上へ", d.scroll > 0, func() { d.scrollSummary(-120) })
 	g.button(screen, image.Rect(360, 695, 440, 737), "下へ", d.scroll < d.maxScroll, func() { d.scrollSummary(120) })
 	if s.Ready && s.Err != nil {
-		g.button(screen, image.Rect(460, 695, 645, 737), "解析を再試行", d.retry != nil, d.retry)
+		if !d.saveFailed {
+			g.button(screen, image.Rect(460, 695, 645, 737), "解析を再試行", d.retry != nil, d.retry)
+		}
+	}
+	if d.saveFailed {
+		g.label(screen, "紹介履歴を保存できません。再試行できます。", 65, 670, 16, warning)
+		g.button(screen, image.Rect(460, 695, 645, 737), "履歴を再保存", true, func() { d.saveAttempted = false })
 	}
 	g.button(screen, image.Rect(680, 695, 865, 737), "閉じる（Esc）", d.close != nil, d.close)
 	next := "次のページ"
@@ -184,6 +209,9 @@ func (g *window) drawSummaryDialog(screen *ebiten.Image, d *summaryDialog) {
 			d.changePage(1)
 		}
 	})
+	if d.page == 3 && d.lesson != nil && d.board != nil {
+		d.techniquePresented = true
+	}
 }
 
 // drawSummaryBoard は選定した独立局面を縮小表示する。改善ページの比較候補は着手前の盤面へ重ねる。
@@ -211,6 +239,10 @@ func (g *window) drawSummaryBoard(screen *ebiten.Image, d *summaryDialog) {
 			color = 0xf1f2eb
 		}
 		vector.DrawFilledCircle(screen, float32(x), float32(y), float32(step*.42), tint(color), true)
+	}
+	if d.lesson != nil {
+		g.drawTechniqueMarks(screen, d, left, top, step)
+		return
 	}
 	stoneMark, captureMark := false, false
 	for _, point := range d.marked {

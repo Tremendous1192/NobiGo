@@ -20,6 +20,8 @@ type SummarySession struct {
 	Completed, Total int
 	Err              error
 	Elapsed          time.Duration
+	Lessons          []TechniqueLesson
+	techniquePending bool
 	pending          []int
 	began, deadline  time.Time
 }
@@ -112,14 +114,29 @@ func (c *Controller) expireSummary(now time.Time) bool {
 func (c *Controller) finishSummary(cause error) {
 	c.invalidate()
 	s := c.SummarySession
+	if s.techniquePending {
+		s.Ready = true
+		s.Err = errors.Join(s.Err, cause)
+		s.Elapsed = time.Since(s.began)
+		return
+	}
 	data, err := BuildGameSummary(c.Board, c.Player, c.Evaluations)
 	if err == nil {
 		s.Data = data
 	}
-	s.Ready = true
 	s.Err = errors.Join(cause, err)
 	s.Elapsed = time.Since(s.began)
 	s.pending = nil
+	if cause != nil || err != nil || !time.Now().Before(s.deadline) {
+		s.Ready = true
+		return
+	}
+	// エンジンと同じ単独作業で探索し、画面スレッドの停止や次局とのCPU競合を防ぐ。
+	s.techniquePending = true
+	ctx, cancel := context.WithDeadline(context.Background(), s.deadline)
+	c.cancel = cancel
+	c.Busy = true
+	c.jobs <- analysisJob{ctx: ctx, id: c.generation, turn: len(c.Board.Moves), techniqueBoard: cloneTechniqueBoard(c.Board), techniqueEvaluations: slices.Clone(c.Evaluations)}
 }
 
 // EndSummary は解析を取り消し、再保存せずに終了後の画面へ戻る。

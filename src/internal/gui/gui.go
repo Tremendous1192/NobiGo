@@ -138,7 +138,7 @@ func Run(options Options) (result error) {
 		}
 		result = errors.Join(result, g.engine.Close())
 	}()
-	ebiten.SetWindowTitle("NobiGo(v0.7.1)")
+	ebiten.SetWindowTitle("NobiGo(v0.8.0)")
 	ebiten.SetWindowSize(1180, 800)
 	if g.previewMinimum {
 		ebiten.SetWindowSize(885, 600)
@@ -190,6 +190,7 @@ func (g *window) Update() error {
 	}
 	if g.controller != nil {
 		g.controller.Poll()
+		g.updateTechniqueSave()
 		g.syncPhase()
 		g.advanceResult(time.Now())
 	}

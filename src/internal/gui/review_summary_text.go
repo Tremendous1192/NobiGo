@@ -249,31 +249,7 @@ func summaryPageContent(c *app.Controller, page int) (title, body string, move *
 		}
 		body += "\n\n" + summaryNextAction(scene.facts)
 	case 3:
-		title = "次の一局で試すこと"
-		move = s.Improvement
-		if move == nil {
-			body = "具体的な比較を示せるAI評価と、打てる候補がまだ揃っていません。\n\n次局は、打つ前に自分の石の上下左右を見て、空きが残り1か所のまとまりがないか確認しましょう。"
-			break
-		}
-		body = fmt.Sprintf("%d手目、%sの手を比べます。図は石を置く前です。", move.Turn, summaryActor(c, move.Color))
-		scene, err := makeSummaryScene(c, move)
-		if err != nil {
-			body += "\n対象局面を再現できません。結果画面へ戻ってください。"
-			break
-		}
-		body += "\n\n赤い印・実際の手：" + summaryPlace(move.Point, c.Board.Size) + "\n" + summaryEffectText(c, scene.after, scene.facts, move.Point, move.Color)
-		if scene.alternative == nil {
-			body += "\n\nAI候補を合法に再現できないため、比較は表示しません。"
-			break
-		}
-		if move.Alternative < 0 {
-			body += "\n\nAI候補：パス（盤上の印なし）"
-		} else {
-			body += "\n\n青い印・AI候補：" + summaryPlace(move.Alternative, c.Board.Size)
-		}
-		body += "\n" + summaryEffectText(c, scene.alternative, scene.alternativeFacts, move.Alternative, move.Color)
-		body += "\n\n" + summaryComparisonText(scene)
-		body += "\n候補の先の結果は確定していません。"
+		title, body = techniquePageContent(c)
 	}
 	return
 }

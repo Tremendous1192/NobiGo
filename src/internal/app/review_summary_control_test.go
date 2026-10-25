@@ -26,6 +26,7 @@ func TestSummarySequentialAndReadOnly(t *testing.T) {
 		replyMove(q, 20)
 		pollUntil(t, c, func() bool { return c.SummarySession.Completed == i+1 })
 	}
+	pollUntil(t, c, func() bool { return c.SummarySession.Ready })
 	if !c.SummarySession.Ready || c.Busy || c.SummarySession.Err != nil || len(c.Board.Moves) != 4 || c.Profile.Revision != revision {
 		t.Fatal("summary did not finish without mutation")
 	}
@@ -109,7 +110,8 @@ func TestSummaryReusesCompleteAnalysis(t *testing.T) {
 	if err := c.StartSummary(); err != nil {
 		t.Fatal(err)
 	}
-	if c.Busy || !c.SummarySession.Ready || c.SummarySession.Total != 0 {
+	pollUntil(t, c, func() bool { return c.SummarySession.Ready })
+	if c.Busy || c.SummarySession.Total != 0 {
 		t.Fatal("complete evaluations were requested again")
 	}
 }
